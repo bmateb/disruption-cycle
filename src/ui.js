@@ -130,8 +130,11 @@ function marketTable(pub, tk, o) {
   }
   return h + '</tbody></table>';
 }
+const NIC = { win: ['🚀', 'Funding round or IPO passed'], fail: ['💥', 'Round or IPO failed'], deal: ['🤝', 'Company acquired'], mkt: ['🌍', 'Whole-market event'], bond: ['🏦', 'Bonds and interest rates'], pre: ['🔔', 'Heads-up before an event'], pos: ['📈', 'Good company news'], neg: ['📉', 'Bad company news'], neu: ['📰', 'Routine news'], rum: ['🗣️', 'Rumour'], fun: ['🎭', 'Gossip, may or may not matter'], tip: ['🔥', 'Hot tip. Be careful'], sys: ['ℹ️', 'Market notice'] };
+function nIcon(x) { const d = NIC[x.ty] || NIC.neu; return '<i class="ni" title="' + d[1] + '" aria-label="' + d[1] + '">' + d[0] + '</i>'; }
+function newsLegend() { return '<div class="nleg">' + Object.keys(NIC).map(k => '<span>' + NIC[k][0] + ' ' + NIC[k][1] + '</span>').join('') + '</div>'; }
 function newsFeed(items, n) {
-  return '<div class="feed">' + (items.length ? items.slice(0, n || 12).map(x => '<div' + (x.c >= 0 ? ' class="nl" data-act="goto" data-i="' + x.c + '"' : '') + '><span class="t">Y' + x.t + '</span>' + esc(x.x) + '</div>').join('') : '<div class="faint">No news yet.</div>') + '</div>';
+  return '<div class="feed">' + (items.length ? items.slice(0, n || 12).map(x => '<div' + (x.c >= 0 ? ' class="nl" data-act="goto" data-i="' + x.c + '"' : '') + '><span class="t">Y' + x.t + '</span>' + nIcon(x) + esc(x.x) + '</div>').join('') : '<div class="faint">No news yet.</div>') + '</div>';
 }
 function tapeFeed(pub) { return '<div class="feed">' + (pub.tape.length ? pub.tape.map(e => '<div><span class="t">Y' + e.t + '</span><b>' + esc(e.n) + '</b> <span class="' + (e.s === 'B' ? 'up' : 'dn') + '">' + (e.s === 'B' ? 'bought' : 'sold') + '</span> ' + e.q + ' <b>' + e.c + '</b> @ ' + px(e.p) + '</div>').join('') : '<div class="faint">No trades yet.</div>') + '</div>'; }
 function leaderTable(top, me) {

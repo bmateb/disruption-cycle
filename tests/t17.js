@@ -1,0 +1,12 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{const br=await chromium.launch();const errs=[];const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h}});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));return p;};
+const host=await mk(1500,1000);await host.goto(BASE+'#host=1');await host.waitForSelector('#go');
+await host.selectOption('#sR','custom');await host.fill('#sU',BU);await host.fill('#sT','8');await host.fill('#sS','30');await host.fill('#sB','4');await host.fill('#sA',BASE);await host.uncheck('#sBk');
+await host.click('#go');await host.waitForSelector('#lstart');const link=await host.locator('.mono.small').first().innerText();
+const ph=await mk(390,844);await ph.goto(link);await ph.fill('#nm','P');await ph.click('#nb');await ph.waitForSelector('.prac');await ph.click('button[data-act="rdy"]');
+await host.click('#lstart');await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));await host.waitForTimeout(40000);
+const h=await host.evaluate(()=>[...document.querySelectorAll('.brow>.panel')].map(p=>Math.round(p.getBoundingClientRect().height)));console.log('panel heights',h);
+await host.screenshot({path:'v9_host.png',clip:{x:0,y:0,width:1500,height:700}});
+await ph.click('#cnav >> text=News');await ph.waitForTimeout(600);await ph.screenshot({path:'v9_news.png'});
+console.log('icons on news tab',await ph.locator('.feed .ni').count(),'ticker icons',await ph.locator('#ticker .ni').count(),'ERR',errs);await br.close();})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});

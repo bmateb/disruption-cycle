@@ -248,12 +248,12 @@ function fiTop(i, pub, tk, priv, isHost, ctx) {
 function annHTML(pub, open, now) { // dropdown shown during a frozen break: major news of the year just finished
   const items = pub.mj || [], left = mmss(pub.bk - now);
   const head = '<button class="annh" data-act="ann"><span>📣 <b>' + (items.length ? 'Year ' + pub.t + ' results · ' + items.length + ' major news' : 'Planning break') + '</b></span><span>Next year in <b class="mono">' + left + '</b> ' + (open ? '▴' : '▾') + '</span></button>';
-  const body = open ? '<div class="annb">' + items.map(x => '<div class="ai ' + x.k + '"' + (x.c >= 0 ? ' data-act="goto" data-i="' + x.c + '"' : '') + '><i>' + (x.k === 'ok' ? '✓' : x.k === 'bad' ? '✗' : '⚡') + '</i><span>' + esc(x.x) + '</span></div>').join('') + '<p class="small muted" style="margin:8px 0 0">Prices are frozen and trading is closed. Check your portfolio and plan your next move.' + (items.some(x => x.c >= 0) ? ' Tap a headline to open the company.' : '') + '</p></div>' : '';
+  const body = open ? '<div class="annb">' + items.map(x => '<div class="ai ' + x.k + '"' + (x.c >= 0 ? ' data-act="goto" data-i="' + x.c + '"' : '') + '><i>' + (x.ty ? NIC[x.ty][0] : x.k === 'ok' ? '✓' : x.k === 'bad' ? '✗' : '⚡') + '</i><span>' + esc(x.x) + '</span></div>').join('') + '<p class="small muted" style="margin:8px 0 0">Prices are frozen and trading is closed. Check your portfolio and plan your next move.' + (items.some(x => x.c >= 0) ? ' Tap a headline to open the company.' : '') + '</p></div>' : '';
   return '<div class="wrap"><div class="ann">' + head + body + '</div></div>';
 }
 function renderTicker() {
   const t = $('#ticker'); if (!t) return; const items = C.news.slice(0, window.innerWidth <= 560 ? 2 : 3), fresh = Date.now() - C.lastNews < 9000;
-  const html = items.length ? '<div class="wrap"><div class="tick">' + items.map((x, k) => '<div class="ti' + (k === 0 && fresh ? ' new' : '') + '"' + (x.c >= 0 ? ' data-act="goto" data-i="' + x.c + '"' : '') + '><span class="t">' + (k === 0 ? 'NEWS' : 'Y' + x.t) + '</span>' + esc(x.x) + '</div>').join('') + '</div></div>' : '';
+  const html = items.length ? '<div class="wrap"><div class="tick">' + items.map((x, k) => '<div class="ti' + (k === 0 && fresh ? ' new' : '') + '"' + (x.c >= 0 ? ' data-act="goto" data-i="' + x.c + '"' : '') + '><span class="t">' + (k === 0 ? 'NEWS' : 'Y' + x.t) + '</span>' + nIcon(x) + esc(x.x) + '</div>').join('') + '</div></div>' : '';
   if (t.dataset.k !== html) { t.innerHTML = html; t.dataset.k = html; }
 }
 function renderClient(force) {
@@ -305,7 +305,7 @@ function renderClient(force) {
       $('#dtTop').innerHTML = (i >= DC.NP ? fiTop : detailTop)(i, P, tk, C.priv, false, { tf: C.tf, bars: C.bars }); valUpdate(i); ticketUpdate();
     }
   } else if (C.tab === 'port') { body.innerHTML = portHTML(P, tk); body.dataset.k = sig; }
-  else if (C.tab === 'news') { body.innerHTML = '<div class="cols"><div class="panel"><h2>Headlines <span class="small faint">tap one to open the company</span></h2><div class="pb">' + newsFeed(C.news, 40) + '</div></div><div class="panel"><h2>Live trades from the whole class</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div>'; body.dataset.k = sig; }
+  else if (C.tab === 'news') { body.innerHTML = '<div class="cols"><div class="panel"><h2>Headlines <span class="small faint">tap one to open the company</span></h2><div class="pb">' + newsLegend() + newsFeed(C.news, 40) + '</div></div><div class="panel"><h2>Live trades from the whole class</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div>'; body.dataset.k = sig; }
   else if (C.tab === 'board') { body.innerHTML = '<div class="panel"><h2>Leaderboard <span class="small faint">at current prices</span></h2><div class="pb">' + leaderTable(pub.top, C.me.name) + '<p class="small muted" style="margin-top:8px">You are #' + rk + ' of ' + pub.cnt + '.</p></div></div>'; body.dataset.k = sig; }
   else if (C.tab === 'guide') { body.innerHTML = guideHTML(); body.dataset.k = sig; }
   else if (C.tab === 'results') { body.innerHTML = resultsHTML(tk, C.me.name, C.openP) + debriefHTML(tk.db); body.dataset.k = sig; }

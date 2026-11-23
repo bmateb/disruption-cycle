@@ -178,9 +178,9 @@
     G.ph = 'run'; G.t = 0; G.s = 0; G.sc = 0; G.yl = G.cfg.tickSec;
     for (const id of G.ord) { const pl = G.pl[id]; pl.nc = [G.cfg.cash0, G.cfg.cash0, G.cfg.cash0, G.cfg.cash0]; pl.nwc = []; }
     snapshot(G);
-    pushNews(G, [{ x: 'The market is open. Twelve companies are trading. Two bonds and an index fund are also available.', c: -1 }], 1);
+    pushNews(G, [{ x: 'The market is open. Twelve companies are trading. Two bonds and an index fund are also available.', c: -1, ty: 'sys' }], 1);
   }
-  function pushNews(G, items, y) { for (const it of items) { G.news.unshift({ id: ++G.nid, t: y == null ? G.t : y, s: G.s, x: it.x, c: it.c == null ? -1 : it.c, k: it.k || '', m: it.m ? 1 : 0 }); } if (G.news.length > 80) G.news.length = 80; }
+  function pushNews(G, items, y) { for (const it of items) { G.news.unshift({ id: ++G.nid, t: y == null ? G.t : y, s: G.s, x: it.x, c: it.c == null ? -1 : it.c, k: it.k || '', ty: it.ty || '', m: it.m ? 1 : 0 }); } if (G.news.length > 80) G.news.length = 80; }
 
   // ------------------------------------------------------------------ valuation helpers
   function netWorth(G, pl) { let w = pl.cash; for (let i = 0; i < NP; i++) if (pl.hold[i]) w += pl.hold[i] * G.pr[i].P; for (let k = 0; k < NF; k++) if (pl.hold[NP + k]) w += pl.hold[NP + k] * G.fi[k].P; return w; }
@@ -310,7 +310,7 @@
   const NEG = ['launch delayed', 'loses a key customer', 'costs over budget', 'rival cuts prices', 'pilot misses targets', 'lead engineer quits', 'regulator asks questions', 'supplier problems'];
   const NEU = ['hiring continues', 'attends trade fair', 'opens a new office', 'updates its roadmap', 'new CFO starts'];
   function pick(G, a) { return a[Math.floor(rnd(G) * a.length)]; }
-  function emit(G, x, c, y) { pushNews(G, [{ x, c }], y == null ? G.t + 1 : y); }
+  function emit(G, x, c, y, ty) { pushNews(G, [{ x, c, ty }], y == null ? G.t + 1 : y); }
   function shock(G, i, size) { // news impulse: part spikes and fades (overshoot), part lasts, volatility clusters
     const p = G.pr[i]; if (p.st !== 'live') return;
     p.nz = clamp(p.nz + size * 0.5, -0.45, 0.45); p.sent = clamp(p.sent * Math.exp(size * 0.5), 0.7, 1.4);
@@ -329,7 +329,7 @@
     const hi = live.filter(p => p.h >= 2), pool = hi.length ? hi : live, p = pool[Math.floor(rnd(G) * pool.length)];
     const x = k === 'up' ? 'Forum post: buy ' + p.name + ' NOW, it will rise 25%!' : 'Anonymous tip: sell ' + p.name + ' NOW, it will crash 30%!';
     p.nz = clamp(p.nz + (k === 'up' ? 0.13 : -0.13), -0.45, 0.45); p.vm = Math.min(4.5, p.vm + 1.5); setPrice(G, p.i);
-    G.tips.push({ i: p.i, k: k, s: G.s, t: G.t + 1, x: x, buyers: [] }); emit(G, x, p.i); return p.i;
+    G.tips.push({ i: p.i, k: k, s: G.s, t: G.t + 1, x: x, buyers: [] }); emit(G, x, p.i, null, 'tip'); return p.i;
   }
   function tipHit(G, pl, i, side) { if (pl.bot) return; for (const tp of G.tips) if (tp.i === i && ((tp.k === 'up' && side === 'B') || (tp.k === 'down' && side === 'S')) && G.s - tp.s <= 45 && tp.buyers.indexOf(pl.id) < 0) tp.buyers.push(pl.id); }
   function newsStep(G) {
@@ -338,28 +338,28 @@
     for (let i = 0; i < NP; i++) {
       const p = G.pr[i]; if (p.st !== 'live') continue; const g = nextGate(G, i); if (g == null) continue;
       const yrs = g - t, ev = EVN[p.gi], k = p.gi + '';
-      if (yrs === 2 && !p.an[k + 'f'] && fr > 0.35 && R() < 0.03) { p.an[k + 'f'] = 1; emit(G, p.name + ': ' + ev + ' planned next year', i); shock(G, i, mag(G, 0.008, 0.02)); }
+      if (yrs === 2 && !p.an[k + 'f'] && fr > 0.35 && R() < 0.03) { p.an[k + 'f'] = 1; emit(G, p.name + ': ' + ev + ' planned next year', i, null, 'pre'); shock(G, i, mag(G, 0.008, 0.02)); }
       if (yrs === 1) {
-        if (!p.an[k + 'n'] && fr > 0.10 && R() < 0.035) { p.an[k + 'n'] = 1; emit(G, p.name + ': ' + ev + ' this year', i); shock(G, i, mag(G, 0.01, 0.03)); }
-        if (!p.an[k + 'c'] && fr > 0.42 && R() < 0.05) { p.an[k + 'c'] = 1; const ps = psi(G, i); emit(G, p.name + ': ' + (ps < 0.55 ? 'cash running low' : ps > 0.95 ? 'well funded' : 'funding on track'), i); shock(G, i, ps < 0.55 ? -mag(G, 0.03, 0.07) : ps > 0.95 ? mag(G, 0.015, 0.04) : 0); }
+        if (!p.an[k + 'n'] && fr > 0.10 && R() < 0.035) { p.an[k + 'n'] = 1; emit(G, p.name + ': ' + ev + ' this year', i, null, 'pre'); shock(G, i, mag(G, 0.01, 0.03)); }
+        if (!p.an[k + 'c'] && fr > 0.42 && R() < 0.05) { p.an[k + 'c'] = 1; const ps = psi(G, i); emit(G, p.name + ': ' + (ps < 0.55 ? 'cash running low' : ps > 0.95 ? 'well funded' : 'funding on track'), i, null, 'pre'); shock(G, i, ps < 0.55 ? -mag(G, 0.03, 0.07) : ps > 0.95 ? mag(G, 0.015, 0.04) : 0); }
         if (!p.an[k + 't'] && fr > 0.62 && R() < 0.09) {
           p.an[k + 't'] = 1; const sg = p.q + norm(R) * 0.12;
-          emit(G, p.name + ': ' + (sg >= 0.58 ? 'insiders upbeat on ' + ev : sg <= 0.42 ? 'insiders doubt ' + ev : ev + ' outcome unclear'), i); shock(G, i, sg >= 0.58 ? mag(G, 0.04, 0.09) : sg <= 0.42 ? -mag(G, 0.05, 0.11) : 0);
+          emit(G, p.name + ': ' + (sg >= 0.58 ? 'insiders upbeat on ' + ev : sg <= 0.42 ? 'insiders doubt ' + ev : ev + ' outcome unclear'), i, null, 'pre'); shock(G, i, sg >= 0.58 ? mag(G, 0.04, 0.09) : sg <= 0.42 ? -mag(G, 0.05, 0.11) : 0);
         }
       }
     }
     // hints before market-wide events
     for (const e of G.ev) {
       if (e.an || e.k === 'rumour' || e.t !== t + 1 || fr < 0.30 || R() > 0.05) continue; e.an = 1;
-      emit(G, e.k === 'hype' ? 'Funds pile into deep tech' : e.k === 'winter' ? 'Central bank signals higher rates' : 'Industry giant eyes the core market', -1);
+      emit(G, e.k === 'hype' ? 'Funds pile into deep tech' : e.k === 'winter' ? 'Central bank signals higher rates' : 'Industry giant eyes the core market', -1, null, 'mkt');
       G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, (e.k === 'hype' ? [0, 0.01, 0.035] : e.k === 'winter' ? [-0.015, -0.025, -0.04] : [-0.03, 0.01, 0.01])[p.h - 1]); });
     }
     // scheduled fake tips (attention checks)
     for (const pl of G.tipPlan) if (!pl.done && G.t + 1 === pl.y && fr >= pl.f) { pl.done = 1; fakeTip(G, pl.k); }
     // light-hearted stories
     if (R() < 0.035) {
-      if (R() < 0.18) emit(G, FUNMAC[Math.floor(R() * FUNMAC.length)], -1);
-      else { const live = G.pr.filter(p => p.st === 'live'); if (live.length) { const p = live[Math.floor(R() * live.length)], f = FUN[Math.floor(R() * FUN.length)]; emit(G, p.name + ' ' + f[0], p.i); if (f[1]) shock(G, p.i, f[1] * (0.8 + R() * 0.8)); } }
+      if (R() < 0.18) emit(G, FUNMAC[Math.floor(R() * FUNMAC.length)], -1, null, 'fun');
+      else { const live = G.pr.filter(p => p.st === 'live'); if (live.length) { const p = live[Math.floor(R() * live.length)], f = FUN[Math.floor(R() * FUN.length)]; emit(G, p.name + ' ' + f[0], p.i, null, 'fun'); if (f[1]) shock(G, p.i, f[1] * (0.8 + R() * 0.8)); } }
     }
     // everyday company chatter
     if (R() < 0.16) {
@@ -368,9 +368,9 @@
       let x = R() * w.reduce((a, b) => a + b, 0), j = 0; while (j < live.length - 1 && (x -= w[j]) > 0) j++;
       const p = live[j]; p.nl = G.sc; const sg = p.q + norm(R) * 0.22;
       const big = R() < 0.12 ? 2.6 : 1; // occasional headline that really moves the stock
-      if (sg > 0.58) { emit(G, p.name + ': ' + pick(G, POS), p.i); shock(G, p.i, mag(G, 0.012, 0.03) * big); }
-      else if (sg < 0.42) { emit(G, p.name + ': ' + pick(G, NEG), p.i); shock(G, p.i, -mag(G, 0.012, 0.035) * big); }
-      else emit(G, p.name + ': ' + pick(G, NEU), p.i);
+      if (sg > 0.58) { emit(G, p.name + ': ' + pick(G, POS), p.i, null, 'pos'); shock(G, p.i, mag(G, 0.012, 0.03) * big); }
+      else if (sg < 0.42) { emit(G, p.name + ': ' + pick(G, NEG), p.i, null, 'neg'); shock(G, p.i, -mag(G, 0.012, 0.035) * big); }
+      else emit(G, p.name + ': ' + pick(G, NEU), p.i, null, 'neu');
     }
   }
 
@@ -404,7 +404,7 @@
     for (let i = 0; i < NP; i++) { const p = G.pr[i]; if (p.st === 'live') { p.zmax = Math.max(p.zmax, p.z); recomputeAnchor(G, i, p.jump); p.jump = false; } }
     // 5. settlement
     if (t >= T) settle(G, news);
-    if (G.ph !== 'end') G.maj = news.filter(n => n.m).map(n => ({ x: n.x, c: n.c, k: n.k }));
+    if (G.ph !== 'end') G.maj = news.filter(n => n.m).map(n => ({ x: n.x, c: n.c, k: n.k, ty: n.ty }));
     pushNews(G, news, t);
     fiPrices(G); for (const f of G.fi) { if (G.ph === 'end' && f.kind === 'bond') f.P = 100; f.pp = f.pp; touch(f); f.ph.push(round(f.P, 2)); }
     for (const p of G.pr) { p.pp = p.pp; touch(p); p.ph.push(round(p.P, 2)); }
@@ -429,34 +429,34 @@
       p.v *= up; p.stage++; p.gi++; p.ups.push(round(up, 2)); p.jump = true; p.nz = clamp(p.nz + mag(G, 0.04, 0.09), -0.45, 0.45); p.vm = 3;
       const nn = nextGate(G, i);
       if (nn != null) p.cash += p.burn * (nn - G.t) * 0.4; // outside round
-      news.push({ x: p.name + ': ' + ev + ' succeeds' + (ps < 0.6 ? ', cash nearly gone' : '. Shares jump'), c: i, m: 1, k: 'ok' });
+      news.push({ x: p.name + ': ' + ev + ' succeeds' + (ps < 0.6 ? ', cash nearly gone' : '. Shares jump'), c: i, m: 1, k: 'ok', ty: 'win' });
     } else {
       p.st = 'dead'; p.gi++; const lo = Math.max(0.2, p.P * 0.05); p.fade = { from: Math.max(lo, p.P * 0.32), to: lo, n: 0 }; p.P = p.fade.from; p.A = p.P; p.At = p.P; p.z = 0; p.nz = 0; touch(p);
-      news.push({ x: p.name + ': ' + ev + ' fails' + (ps < 0.6 ? ', cash ran out' : '') + '. Shares collapse', c: i, m: 1, k: 'bad' });
+      news.push({ x: p.name + ': ' + ev + ' fails' + (ps < 0.6 ? ', cash ran out' : '') + '. Shares collapse', c: i, m: 1, k: 'bad', ty: 'fail' });
     }
   }
   function fire(G, k, news) {
     const R = () => rnd(G);
     if (k === 'hype') {
-      G.rt.rT = 0.006; G.rt.sT = -0.004; news.push({ x: 'Bonds: investors want risk, State Bond slips', c: -1 });
+      G.rt.rT = 0.006; G.rt.sT = -0.004; news.push({ x: 'Bonds: investors want risk, State Bond slips', c: -1, ty: 'bond' });
       G.mac[2] *= 1.30; G.macT[2] = 1.0; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [0, 0.03, 0.09][p.h - 1]); });
-      news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1, m: 1, k: 'mkt' });
+      news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1, m: 1, k: 'mkt', ty: 'mkt' });
     } else if (k === 'winter') {
-      G.rt.rT = 0.015; G.rt.sT = 0.012; news.push({ x: 'Bonds fall as rates jump, Corporate Bond hit hardest', c: -1 });
+      G.rt.rT = 0.015; G.rt.sT = 0.012; news.push({ x: 'Bonds fall as rates jump, Corporate Bond hit hardest', c: -1, ty: 'bond' });
       G.mac[0] *= 0.93; G.mac[1] *= 0.86; G.mac[2] *= 0.74; G.macT = [0.97, 0.94, 0.88];
       G.fc = 0.35; G.fcUntil = G.t + 3; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [-0.05, -0.08, -0.12][p.h - 1]); });
-      news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1, m: 1, k: 'mkt' });
+      news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1, m: 1, k: 'mkt', ty: 'mkt' });
     } else if (k === 'disrupt') {
-      G.rt.rT = -0.006; G.rt.sT = 0.006; news.push({ x: 'Nervous investors buy State Bonds, Corporate Bond weakens', c: -1 });
+      G.rt.rT = -0.006; G.rt.sT = 0.006; news.push({ x: 'Nervous investors buy State Bonds, Corporate Bond weakens', c: -1, ty: 'bond' });
       G.mac[0] *= 0.88; G.macT[0] = Math.min(G.macT[0], 0.9); G.mac[1] *= 1.06; G.macT[1] = Math.max(G.macT[1], 1.0); G.pr.forEach(p => { if (p.st === 'live' && p.h < 3) shock(G, p.i, p.h === 1 ? -0.09 : 0.04); });
-      news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1, m: 1, k: 'mkt' });
+      news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1, m: 1, k: 'mkt', ty: 'mkt' });
     } else if (k === 'rumour') {
       const cand = G.pr.filter(p => p.st === 'live' && p.h >= 2 && p.stage < 3);
       if (!cand.length) return;
       const p = cand[Math.floor(R() * cand.length)];
       const real = R() < 0.5;
       G.rum = { i: p.i, t2: G.t + 2, real }; p.sent *= 1.15; shock(G, p.i, 0.08);
-      news.push({ x: 'Rumour: ' + p.name + ' may be acquired', c: p.i });
+      news.push({ x: 'Rumour: ' + p.name + ' may be acquired', c: p.i, ty: 'rum' });
     }
     G.log.push({ t: G.t, k });
   }
@@ -466,9 +466,9 @@
     if (rm.real) {
       const px = p.A * 1.55; p.P = px; p.A = px; p.At = px; p.st = 'sold'; p.exitV = px; p.z = 0; p.nz = 0; touch(p);
       for (const id of G.ord) { const pl = G.pl[id]; if (pl.hold[p.i]) { const pay = pl.hold[p.i] * px; pl.rp[p.i] += pay - pl.cost[p.i]; pl.cash += pay; pl.hold[p.i] = 0; pl.cost[p.i] = 0; } }
-      news.push({ x: p.name + ' acquired at ' + round(px, 1) + ' per share. Holders paid out', c: p.i, m: 1, k: 'ok' });
+      news.push({ x: p.name + ' acquired at ' + round(px, 1) + ' per share. Holders paid out', c: p.i, m: 1, k: 'ok', ty: 'deal' });
     } else {
-      p.sent *= 0.80; shock(G, p.i, -0.07); news.push({ x: p.name + ': takeover talks off', c: p.i });
+      p.sent *= 0.80; shock(G, p.i, -0.07); news.push({ x: p.name + ': takeover talks off', c: p.i, ty: 'rum' });
     }
   }
   function settle(G, news) {
@@ -477,7 +477,7 @@
       if (p.st === 'live') { p.P = p.v; p.A = p.v; p.At = p.v; p.z = 0; p.nz = 0; p.st = 'exit'; p.exitV = p.v; touch(p); }
     }
     G.rt.r = 0; G.rt.sp = 0; G.rt.rT = 0; G.rt.sT = 0; fiPrices(G); for (const f of G.fi) { if (f.kind === 'bond') f.P = 100; f.st = 'exit'; touch(f); }
-    news.push({ x: 'Game over: final payouts made', c: -1 });
+    news.push({ x: 'Game over: final payouts made', c: -1, ty: 'sys' });
   }
 
   // ------------------------------------------------------------------ outputs
