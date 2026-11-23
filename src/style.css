@@ -226,3 +226,13 @@ td.pxc.fu,.bigpx.fu{animation:flu 1s ease-out} td.pxc.fd,.bigpx.fd{animation:fld
 }
 
 @media (max-width:560px){.top .wrap{flex-wrap:nowrap;gap:10px}.top .brand{display:none}.clock{min-width:0;flex:1}.kpi{min-width:0}}
+
+/* v5: major-news dropdown */
+.ann{margin-top:8px;border:2px solid var(--brand);border-radius:12px;background:var(--surface);overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.14);animation:annin .35s ease-out}
+@keyframes annin{0%{transform:translateY(-10px);opacity:0}100%{transform:none;opacity:1}}
+.annh{display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;border:0;background:var(--brand);color:var(--brand-ink);padding:10px 14px;font-size:14px;text-align:left}
+.annb{padding:8px 14px 12px}
+.ai{display:flex;gap:10px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--line);font-size:14.5px;font-weight:600}
+.ai[data-act]{cursor:pointer} .ai i{font-style:normal;font-weight:800;width:18px;text-align:center}
+.ai.ok i{color:var(--good)} .ai.bad i{color:var(--bad)} .ai.mkt i{color:var(--warn)}
+.ai.ok{background:linear-gradient(90deg,var(--good-bg),transparent 60%)} .ai.bad{background:linear-gradient(90deg,var(--bad-bg),transparent 60%)} .ai.mkt{background:linear-gradient(90deg,var(--warn-bg),transparent 60%)}

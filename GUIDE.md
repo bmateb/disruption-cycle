@@ -81,3 +81,7 @@ Live market game for the "Financing of innovation" session. Every student invest
 
 - **Fun stories:** light-hearted headlines about the companies (a CEO caught in an office affair, suspected corporate espionage, a viral office dog, a CFO expense scandal, and plain nonsense such as a coffee machine finally being fixed). Some move the price a little, some mean nothing.
 - **Fake hot tips (attention checks):** two dubious headlines per game ("Forum post: buy X NOW, it will rise 25%!" and later "Anonymous tip: sell Y NOW, it will crash 30%!"). The price spikes for a moment and then drifts back to normal within about a minute. Anyone who buys (or sells) the tipped company within 45 seconds is listed by name in the debrief on the Final results screen. You can also fire a tip yourself under Controls, and switch the tips off on the setup screen. Whatever the followers' own trades moved the price stays, because that is real money.
+
+## Version 5 changes
+
+- **Major-news pause:** when a year ends with major news (a funding round or IPO passing or failing, a takeover, a market-wide event) the market freezes for 15 seconds (configurable, setup screen or Controls) and a dropdown announces the news on every screen, including yours. Green ✓ = passed, red ✗ = failed, ⚡ = market-wide. Tap a headline to open the company; tap the bar to collapse the dropdown. Trading is closed during the pause. If a planning break is also on, one pause runs for the longer of the two times.

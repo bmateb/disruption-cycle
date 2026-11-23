@@ -31,7 +31,7 @@
   const DEF = {
     T: 14, tickSec: 75, cash0: 100000, fee: 0.005, ddCost: 1500, maxExp: 0.4,
     depthF: 2.0, lam: 0.3, phi: 0.08, sigTr: 0.18, sigDD: 0.10, sigSent: 0.02,
-    events: true, anon: false, news: true, tips: true, bar: 5,
+    events: true, anon: false, news: true, tips: true, evp: true, evSec: 15, bar: 5,
   };
 
   // ------------------------------------------------------------------ utils
@@ -89,7 +89,7 @@
   // ------------------------------------------------------------------ setup
   function newGame(cfg, seed) {
     const c = Object.assign({}, DEF, cfg || {});
-    const G = { v: 1, cfg: c, T: c.T, t: 0, ph: 'prep', rs: hash(String(seed || 'dc')) || 7, pl: {}, ord: [], pr: [], tape: [], news: [], log: [], mac: [1, 1, 1], macT: [1, 1, 1], fc: 1, fcUntil: 0, rum: null, K: 0, seq: 0, hist: [], ev: [], s: 0, sc: 0, bn: 0, nid: 0, yl: c.tickSec, nl: 0, tips: [], tipPlan: [] };
+    const G = { v: 1, cfg: c, T: c.T, t: 0, ph: 'prep', rs: hash(String(seed || 'dc')) || 7, pl: {}, ord: [], pr: [], tape: [], news: [], log: [], mac: [1, 1, 1], macT: [1, 1, 1], fc: 1, fcUntil: 0, rum: null, K: 0, seq: 0, hist: [], ev: [], s: 0, sc: 0, bn: 0, nid: 0, yl: c.tickSec, nl: 0, tips: [], tipPlan: [], maj: [] };
     return G;
   }
   function addPlayer(G, id, name, bot) {
@@ -143,7 +143,7 @@
     snapshot(G);
     pushNews(G, [{ x: 'The market is open. Twelve companies are trading.', c: -1 }], 1);
   }
-  function pushNews(G, items, y) { for (const it of items) { G.news.unshift({ id: ++G.nid, t: y == null ? G.t : y, s: G.s, x: it.x, c: it.c == null ? -1 : it.c }); } if (G.news.length > 80) G.news.length = 80; }
+  function pushNews(G, items, y) { for (const it of items) { G.news.unshift({ id: ++G.nid, t: y == null ? G.t : y, s: G.s, x: it.x, c: it.c == null ? -1 : it.c, k: it.k || '', m: it.m ? 1 : 0 }); } if (G.news.length > 80) G.news.length = 80; }
 
   // ------------------------------------------------------------------ valuation helpers
   function netWorth(G, pl) { let w = pl.cash; for (let i = 0; i < NP; i++) if (pl.hold[i]) w += pl.hold[i] * G.pr[i].P; return w; }
@@ -337,7 +337,7 @@
   // ------------------------------------------------------------------ year step
   function advance(G) {
     if (G.ph !== 'run' && G.ph !== 'pause') return;
-    const T = G.T; G.t++; G.sc = 0; G.yl = G.cfg.tickSec; const t = G.t; const news = [];
+    const T = G.T; G.t++; G.sc = 0; G.yl = G.cfg.tickSec; const t = G.t; const news = []; G.maj = [];
     const R = () => rnd(G);
     // 1. macro events
     for (const e of G.ev) if (e.t === t) fire(G, e.k, news);
@@ -362,6 +362,7 @@
     for (let i = 0; i < NP; i++) { const p = G.pr[i]; if (p.st === 'live') { p.zmax = Math.max(p.zmax, p.z); recomputeAnchor(G, i, p.jump); p.jump = false; } }
     // 5. settlement
     if (t >= T) settle(G, news);
+    if (G.ph !== 'end') G.maj = news.filter(n => n.m).map(n => ({ x: n.x, c: n.c, k: n.k }));
     pushNews(G, news, t);
     for (const p of G.pr) { p.pp = p.pp; touch(p); p.ph.push(round(p.P, 2)); }
     trackPlayers(G);
@@ -385,24 +386,24 @@
       p.v *= up; p.stage++; p.gi++; p.ups.push(round(up, 2)); p.jump = true; p.nz = clamp(p.nz + mag(G, 0.04, 0.09), -0.45, 0.45); p.vm = 3;
       const nn = nextGate(G, i);
       if (nn != null) p.cash += p.burn * (nn - G.t) * 0.4; // outside round
-      news.push({ x: p.name + ': ' + ev + ' succeeds' + (ps < 0.6 ? ', cash nearly gone' : '. Shares jump'), c: i });
+      news.push({ x: p.name + ': ' + ev + ' succeeds' + (ps < 0.6 ? ', cash nearly gone' : '. Shares jump'), c: i, m: 1, k: 'ok' });
     } else {
       p.st = 'dead'; p.gi++; const lo = Math.max(0.2, p.P * 0.05); p.fade = { from: Math.max(lo, p.P * 0.32), to: lo, n: 0 }; p.P = p.fade.from; p.A = p.P; p.At = p.P; p.z = 0; p.nz = 0; touch(p);
-      news.push({ x: p.name + ': ' + ev + ' fails' + (ps < 0.6 ? ', cash ran out' : '') + '. Shares collapse', c: i });
+      news.push({ x: p.name + ': ' + ev + ' fails' + (ps < 0.6 ? ', cash ran out' : '') + '. Shares collapse', c: i, m: 1, k: 'bad' });
     }
   }
   function fire(G, k, news) {
     const R = () => rnd(G);
     if (k === 'hype') {
       G.mac[2] *= 1.30; G.macT[2] = 1.0; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [0, 0.03, 0.09][p.h - 1]); });
-      news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1 });
+      news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'winter') {
       G.mac[0] *= 0.93; G.mac[1] *= 0.86; G.mac[2] *= 0.74; G.macT = [0.97, 0.94, 0.88];
       G.fc = 0.35; G.fcUntil = G.t + 3; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [-0.05, -0.08, -0.12][p.h - 1]); });
-      news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1 });
+      news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'disrupt') {
       G.mac[0] *= 0.88; G.macT[0] = Math.min(G.macT[0], 0.9); G.mac[1] *= 1.06; G.macT[1] = Math.max(G.macT[1], 1.0); G.pr.forEach(p => { if (p.st === 'live' && p.h < 3) shock(G, p.i, p.h === 1 ? -0.09 : 0.04); });
-      news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1 });
+      news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'rumour') {
       const cand = G.pr.filter(p => p.st === 'live' && p.h >= 2 && p.stage < 3);
       if (!cand.length) return;
@@ -419,7 +420,7 @@
     if (rm.real) {
       const px = p.A * 1.55; p.P = px; p.A = px; p.At = px; p.st = 'sold'; p.exitV = px; p.z = 0; p.nz = 0; touch(p);
       for (const id of G.ord) { const pl = G.pl[id]; if (pl.hold[p.i]) { const pay = pl.hold[p.i] * px; pl.rp[p.i] += pay - pl.cost[p.i]; pl.cash += pay; pl.hold[p.i] = 0; pl.cost[p.i] = 0; } }
-      news.push({ x: p.name + ' acquired at ' + round(px, 1) + ' per share. Holders paid out', c: p.i });
+      news.push({ x: p.name + ' acquired at ' + round(px, 1) + ' per share. Holders paid out', c: p.i, m: 1, k: 'ok' });
     } else {
       p.sent *= 0.80; shock(G, p.i, -0.07); news.push({ x: p.name + ': takeover talks off', c: p.i });
     }
