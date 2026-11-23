@@ -4,7 +4,7 @@ const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
   const br=await chromium.launch(); const errs=[];
   const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h}});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());return p;};
   const host=await mk(1400,900); await host.goto(BASE+'#host=1'); await host.waitForSelector('#go');
-  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','4'); await host.fill('#sA',BASE); await host.uncheck('#sBk');
+  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','4'); await host.fill('#sA',BASE); await host.uncheck('#sBk'); await host.uncheck('#sEv');
   await host.click('#go'); await host.waitForSelector('#lstart'); const link=await host.locator('.mono.small').first().innerText();
   const s=await mk(1200,850); await s.goto(link); await s.fill('#nm','Follower'); await s.click('#nb'); await s.waitForSelector('.prac'); await s.click('button[data-act="rdy"]');
   await host.click('#lstart'); await s.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));
