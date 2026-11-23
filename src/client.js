@@ -305,7 +305,7 @@ function renderClient(force) {
       $('#dtTop').innerHTML = (i >= DC.NP ? fiTop : detailTop)(i, P, tk, C.priv, false, { tf: C.tf, bars: C.bars }); valUpdate(i); ticketUpdate();
     }
   } else if (C.tab === 'port') { body.innerHTML = portHTML(P, tk); body.dataset.k = sig; }
-  else if (C.tab === 'news') { body.innerHTML = '<div class="cols"><div class="panel"><h2>Headlines <span class="small faint">tap one to open the company</span></h2><div class="pb">' + newsLegend() + newsFeed(C.news, 40) + '</div></div><div class="panel"><h2>Live trades from the whole class</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div>'; body.dataset.k = sig; }
+  else if (C.tab === 'news') { body.innerHTML = '<div class="cols"><div class="panel"><h2>Headlines ' + NLEG_BTN + ' <span class="small faint">tap one to open the company</span></h2><div class="pb">' + newsFeed(C.news, 40) + '</div></div><div class="panel"><h2>Live trades from the whole class</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div>'; body.dataset.k = sig; }
   else if (C.tab === 'board') { body.innerHTML = '<div class="panel"><h2>Leaderboard <span class="small faint">at current prices</span></h2><div class="pb">' + leaderTable(pub.top, C.me.name) + '<p class="small muted" style="margin-top:8px">You are #' + rk + ' of ' + pub.cnt + '.</p></div></div>'; body.dataset.k = sig; }
   else if (C.tab === 'guide') { body.innerHTML = guideHTML(); body.dataset.k = sig; }
   else if (C.tab === 'results') { body.innerHTML = resultsHTML(tk, C.me.name, C.openP) + debriefHTML(tk.db); body.dataset.k = sig; }

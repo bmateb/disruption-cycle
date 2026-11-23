@@ -1,0 +1,13 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{const br=await chromium.launch();const errs=[];const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h}});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));return p;};
+const host=await mk(1500,900);await host.goto(BASE+'#host=1');await host.waitForSelector('#go');
+await host.selectOption('#sR','custom');await host.fill('#sU',BU);await host.fill('#sT','8');await host.fill('#sS','60');await host.fill('#sB','4');await host.fill('#sA',BASE);await host.uncheck('#sBk');
+await host.click('#go');await host.waitForSelector('#lstart');const link=await host.locator('.mono.small').first().innerText();
+const ph=await mk(390,844);await ph.goto(link);await ph.fill('#nm','P');await ph.click('#nb');await ph.waitForSelector('.prac');await ph.click('button[data-act="rdy"]');
+await host.click('#lstart');await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));await host.waitForTimeout(3000);
+console.log('inline legend gone (host):',await host.locator('.nleg').count()===0);
+await host.click('#hbody .ibtn');await host.waitForSelector('#nlm');await host.waitForTimeout(1500);console.log('host modal still open after refresh:',await host.locator('#nlm').count()===1,'rows',await host.locator('#nlm .lgl>div').count());await host.screenshot({path:'v91_host.png'});
+await host.click('#nlx');console.log('host closed:',await host.locator('#nlm').count()===0);
+await ph.click('#cnav >> text=News');await ph.click('#cbody .ibtn');await ph.waitForSelector('#nlm');await ph.screenshot({path:'v91_phone.png'});await ph.keyboard.press('Escape');console.log('phone Esc closes:',await ph.locator('#nlm').count()===0);
+await ph.click('#cbody .ibtn');await ph.click('#nlx');console.log('phone x closes:',await ph.locator('#nlm').count()===0,'ERR',errs);await br.close();})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});

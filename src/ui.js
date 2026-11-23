@@ -132,7 +132,15 @@ function marketTable(pub, tk, o) {
 }
 const NIC = { win: ['🚀', 'Funding round or IPO passed'], fail: ['💥', 'Round or IPO failed'], deal: ['🤝', 'Company acquired'], mkt: ['🌍', 'Whole-market event'], bond: ['🏦', 'Bonds and interest rates'], pre: ['🔔', 'Heads-up before an event'], pos: ['📈', 'Good company news'], neg: ['📉', 'Bad company news'], neu: ['📰', 'Routine news'], rum: ['🗣️', 'Rumour'], fun: ['🎭', 'Gossip, may or may not matter'], tip: ['🔥', 'Hot tip. Be careful'], sys: ['ℹ️', 'Market notice'] };
 function nIcon(x) { const d = NIC[x.ty] || NIC.neu; return '<i class="ni" title="' + d[1] + '" aria-label="' + d[1] + '">' + d[0] + '</i>'; }
-function newsLegend() { return '<div class="nleg">' + Object.keys(NIC).map(k => '<span>' + NIC[k][0] + ' ' + NIC[k][1] + '</span>').join('') + '</div>'; }
+const NLEG_BTN = '<button class="ibtn" data-nleg="1" title="What do the icons mean?" aria-label="What do the news icons mean?">i</button>';
+function showNewsLegend() {
+  if (document.getElementById('nlm')) return;
+  const m = document.createElement('div'); m.className = 'modal'; m.id = 'nlm';
+  m.innerHTML = '<div class="mbox legend" role="dialog" aria-label="News icons"><button class="mx" id="nlx" aria-label="Close">✕</button><h3 style="margin:0 0 8px">News icons</h3><div class="lgl">' + Object.keys(NIC).map(k => '<div><i class="ni">' + NIC[k][0] + '</i><span>' + NIC[k][1] + '</span></div>').join('') + '</div></div>';
+  const close = () => { m.remove(); document.removeEventListener('keydown', esc2); }, esc2 = e => { if (e.key === 'Escape') close(); };
+  m.onclick = e => { if (e.target === m || e.target.id === 'nlx') close(); }; document.addEventListener('keydown', esc2); document.body.appendChild(m);
+}
+document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-nleg]')) showNewsLegend(); });
 function newsFeed(items, n) {
   return '<div class="feed">' + (items.length ? items.slice(0, n || 12).map(x => '<div' + (x.c >= 0 ? ' class="nl" data-act="goto" data-i="' + x.c + '"' : '') + '><span class="t">Y' + x.t + '</span>' + nIcon(x) + esc(x.x) + '</div>').join('') : '<div class="faint">No news yet.</div>') + '</div>';
 }

@@ -275,3 +275,11 @@ table.fit{margin-top:0}
 .nleg span{white-space:nowrap}
 .brow{align-items:stretch}
 .brow>.panel{display:flex;flex-direction:column}
+
+/* v9.1: icon key as a floating window */
+.ibtn{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--ink3);background:transparent;color:var(--ink2);font:700 13px/1 Georgia,serif;font-style:italic;cursor:pointer;padding:0;display:inline-grid;place-items:center}
+.ibtn:hover{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.mbox.legend{position:relative;text-align:left;justify-items:stretch;padding-top:20px;max-width:420px}
+.mbox .mx{position:absolute;top:8px;right:10px;width:32px;height:32px;border:0;background:transparent;font-size:18px;color:var(--ink2);cursor:pointer;border-radius:8px}
+.mbox .mx:hover{background:var(--sunk)}
+.lgl{display:grid;gap:8px}.lgl>div{display:flex;align-items:center;gap:4px;font-size:15px}
