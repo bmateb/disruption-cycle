@@ -23,6 +23,13 @@
     { code: 'SKYL', name: 'Skyline', h: 3, p: 10, line: 'Low-orbit satellite broadband for remote regions' },
   ];
   const NP = PROJ.length;
+  const FIN = [ // bonds and an index: priced from interest rates and from the companies, traded at fair price
+    { code: 'GOVB', name: 'State Bond', kind: 'bond', cpn: 0.03, dur: 5, line: 'Lends money to the government. Very safe. Pays 3% of €100 every year. Its price falls when interest rates rise.' },
+    { code: 'CORB', name: 'Corporate Bond', kind: 'bond', cpn: 0.07, dur: 4, line: 'Lends money to established companies. Pays 7% of €100 every year, but loses value when rates rise or when investors get scared.' },
+    { code: 'DCX', name: 'Disruption Index', kind: 'index', cpn: 0, dur: 0, line: 'One fund that holds all twelve companies in equal parts. It follows the whole market. One failure hurts a little, not a lot.' },
+  ];
+  const NF = FIN.length, NA = NP + NF;
+  const ALL = PROJ.concat(FIN.map(f => ({ code: f.code, name: f.name, h: 0, p: 100, line: f.line, kind: f.kind })));
   const STAGES = ['Seed', 'Series A', 'Series B', 'Listed'];
   const EVN = ['Series A round', 'Series B round', 'IPO'];
   const VOLS = { 1: 0.0022, 2: 0.0036, 3: 0.0060 };
@@ -94,7 +101,7 @@
   }
   function addPlayer(G, id, name, bot) {
     if (G.pl[id]) return G.pl[id];
-    const pl = { id, name: String(name || 'Player').slice(0, 18), cash: G.cfg.cash0, hold: new Array(NP).fill(0), cost: new Array(NP).fill(0), dd: {}, ddn: 0, tr: 0, vol: 0, bot: bot || null, last: 0, ack: null, join: G.t, tok: null, seen: [], sq: 0, rp: new Array(NP).fill(0), rdy: 0, nwc: [], nc: [G.cfg.cash0, G.cfg.cash0, G.cfg.cash0, G.cfg.cash0] };
+    const pl = { id, name: String(name || 'Player').slice(0, 18), cash: G.cfg.cash0, hold: new Array(NA).fill(0), cost: new Array(NA).fill(0), dd: {}, ddn: 0, tr: 0, vol: 0, bot: bot || null, last: 0, ack: null, join: G.t, tok: null, seen: [], sq: 0, rp: new Array(NA).fill(0), cp: 0, rdy: 0, nwc: [], nc: [G.cfg.cash0, G.cfg.cash0, G.cfg.cash0, G.cfg.cash0] };
     G.pl[id] = pl; G.ord.push(id);
     return pl;
   }
@@ -121,6 +128,8 @@
       return p;
     });
     G.pr.forEach((p, i) => { const a = baseAnchor(G, i, 0.5); p.A = a; p.At = a; p.P = a; p.pp = a; p.cc = [a, a, a, a]; p.ph = [round(a, 2)]; });
+    G.fi = FIN.map((f, k) => ({ i: NP + k, code: f.code, name: f.name, kind: f.kind, cpn: f.cpn, dur: f.dur, st: 'live', P: 100, pp: 100, cc: [100, 100, 100, 100], cd: [], ph: [100] }));
+    G.rt = { r: 0, sp: 0, rT: 0, sT: 0 }; fiPrices(G); G.fi.forEach(f => { f.P = round(f.P, 2); f.pp = f.P; f.cc = [f.P, f.P, f.P, f.P]; f.ph = [f.P]; });
     G.tips = []; G.tipPlan = [];
     if (c.tips) { const y1 = clamp(Math.round(T * 0.3), 2, T - 3), y2 = clamp(Math.round(T * 0.68), y1 + 2, T - 1); G.tipPlan = [{ y: y1, f: 0.2 + rnd(G) * 0.5, k: 'up' }, { y: y2, f: 0.2 + rnd(G) * 0.5, k: 'down' }]; }
     // event schedule
@@ -129,6 +138,34 @@
       const t1 = clamp(Math.round(T * 0.22), 2, T - 3), t2 = clamp(Math.round(T * 0.50), t1 + 2, T - 3), t3 = clamp(Math.round(T * 0.72), t2 + 1, T - 2), tr = clamp(Math.round(T * 0.40), 3, T - 4);
       G.ev = [{ t: t1, k: 'hype' }, { t: tr, k: 'rumour' }, { t: t2, k: 'winter' }, { t: t3, k: 'disrupt' }];
     }
+  }
+  function fiPrices(G) { // bonds follow interest rates and fear; the index is the equal-weighted average of the companies
+    let s = 0; for (const p of G.pr) s += p.P / (p.ph[0] || p.P); const idx = 100 * s / NP, lx = Math.log(idx / 100), rt = G.rt;
+    G.fi[0].P = 100 * Math.exp(-5 * rt.r + 0.12 * Math.max(0, -lx));
+    G.fi[1].P = 100 * Math.exp(-4 * (rt.r + rt.sp) + 0.20 * Math.min(0, lx));
+    G.fi[2].P = idx;
+  }
+  function fiStep(G) {
+    const R = () => rnd(G), rt = G.rt;
+    rt.r += (rt.rT - rt.r) * 0.03 + 0.0007 * norm(R); rt.sp += (rt.sT - rt.sp) * 0.03 + 0.0005 * norm(R);
+    for (const f of G.fi) f.pp = f.P;
+    fiPrices(G); for (const f of G.fi) touch(f);
+  }
+  function fiTrade(G, pl, i, S, buy) {
+    S = Math.floor(S); const f = G.fi[i - NP], fr = G.cfg.fee * 0.4;
+    if (G.ph !== 'run') return { ok: false, err: G.ph === 'pause' ? 'Market paused' : 'Market closed' };
+    if (f.st !== 'live') return { ok: false, err: 'Not tradable' };
+    if (!(S >= 1)) return { ok: false, err: 'Amount too small' };
+    const x = S * f.P, fee = x * fr;
+    if (buy) {
+      if (x + fee > pl.cash + 1e-9) return { ok: false, err: 'Not enough cash' };
+      pl.cash -= x + fee; pl.hold[i] += S; pl.cost[i] += x + fee; if (pl.seen.indexOf(i) < 0) pl.seen.push(i);
+    } else {
+      if (S > pl.hold[i]) return { ok: false, err: 'You do not hold that many units' };
+      const basis = pl.cost[i] * (S / pl.hold[i]); pl.cash += x - fee; pl.rp[i] += x - fee - basis; pl.hold[i] -= S; pl.cost[i] -= basis;
+    }
+    pl.tr++; pl.vol += x; pl.last = G.t; G.fees = (G.fees || 0) + fee; tape(G, pl, buy ? 'B' : 'S', i, S, f.P);
+    return { ok: true, S, x, avg: f.P };
   }
   function open(G, nExpected) { setupMarket(G, nExpected); G.ph = 'prep'; }
   function resize(G, n) { // rescale money-denominated market parameters to the real number of players
@@ -141,12 +178,12 @@
     G.ph = 'run'; G.t = 0; G.s = 0; G.sc = 0; G.yl = G.cfg.tickSec;
     for (const id of G.ord) { const pl = G.pl[id]; pl.nc = [G.cfg.cash0, G.cfg.cash0, G.cfg.cash0, G.cfg.cash0]; pl.nwc = []; }
     snapshot(G);
-    pushNews(G, [{ x: 'The market is open. Twelve companies are trading.', c: -1 }], 1);
+    pushNews(G, [{ x: 'The market is open. Twelve companies are trading. Two bonds and an index fund are also available.', c: -1 }], 1);
   }
   function pushNews(G, items, y) { for (const it of items) { G.news.unshift({ id: ++G.nid, t: y == null ? G.t : y, s: G.s, x: it.x, c: it.c == null ? -1 : it.c, k: it.k || '', m: it.m ? 1 : 0 }); } if (G.news.length > 80) G.news.length = 80; }
 
   // ------------------------------------------------------------------ valuation helpers
-  function netWorth(G, pl) { let w = pl.cash; for (let i = 0; i < NP; i++) if (pl.hold[i]) w += pl.hold[i] * G.pr[i].P; return w; }
+  function netWorth(G, pl) { let w = pl.cash; for (let i = 0; i < NP; i++) if (pl.hold[i]) w += pl.hold[i] * G.pr[i].P; for (let k = 0; k < NF; k++) if (pl.hold[NP + k]) w += pl.hold[NP + k] * G.fi[k].P; return w; }
 
   // ------------------------------------------------------------------ trading
   function quoteBuy(G, i, S) {
@@ -167,6 +204,7 @@
   function sharesForCash(G, i, x) { const p = G.pr[i]; return Math.max(0, Math.floor((p.D / p.P) * (1 - Math.exp(-x / p.D)))); }
 
   function tryBuy(G, pl, i, S, dry) {
+    if (i >= NP) return fiTrade(G, pl, i, S, true);
     const p = G.pr[i]; S = Math.floor(S);
     if (G.ph !== 'run') return { ok: false, err: G.ph === 'pause' ? 'Market paused' : 'Market closed' };
     if (p.st !== 'live') return { ok: false, err: 'Not tradable' };
@@ -185,6 +223,7 @@
   }
   function otherPos(G, pl, skip) { let s = 0; for (let k = 0; k < NP; k++) if (k !== skip && pl.hold[k]) s += pl.hold[k] * G.pr[k].P; return s; }
   function trySell(G, pl, i, S) {
+    if (i >= NP) return fiTrade(G, pl, i, S, false);
     const p = G.pr[i]; S = Math.floor(S);
     if (G.ph !== 'run') return { ok: false, err: G.ph === 'pause' ? 'Market paused' : 'Market closed' };
     if (p.st !== 'live') return { ok: false, err: 'Not tradable' };
@@ -210,19 +249,19 @@
     return { ok: true, score };
   }
   function tape(G, pl, side, i, S, px) {
-    const e = { t: G.t, s: side, n: G.cfg.anon ? 'Investor' : pl.name, c: PROJ[i].code, q: S, p: round(px, 2), id: ++G.seq };
+    const e = { t: G.t, s: side, n: G.cfg.anon ? 'Investor' : pl.name, c: ALL[i].code, q: S, p: round(px, 2), id: ++G.seq };
     G.tape.unshift(e); if (G.tape.length > 40) G.tape.pop();
   }
   function act(G, pid, a) {
     const pl = G.pl[pid]; if (!pl) return { ok: false, err: 'Unknown player' };
-    const i = a.p | 0; if (i < 0 || i >= NP) return { ok: false, err: 'Bad project' };
+    const i = a.p | 0; if (i < 0 || i >= NA) return { ok: false, err: 'Bad project' };
     let r;
     if (a.k === 'b') {
       r = tryBuy(G, pl, i, a.s);
-      if (!r.ok && /cash|Concentration/.test(r.err || '') && a.s > 1) { const m = maxBuyShares(G, pl, i); if (m >= 1 && m >= a.s * 0.85) r = tryBuy(G, pl, i, m); }
+      if (i < NP && !r.ok && /cash|Concentration/.test(r.err || '') && a.s > 1) { const m = maxBuyShares(G, pl, i); if (m >= 1 && m >= a.s * 0.85) r = tryBuy(G, pl, i, m); }
     }
     else if (a.k === 's') r = trySell(G, pl, i, a.s);
-    else if (a.k === 'd') r = tryDD(G, pl, i);
+    else if (a.k === 'd') r = i < NP ? tryDD(G, pl, i) : { ok: false, err: 'No analyst report for this one' };
     else r = { ok: false, err: 'Unknown action' };
     pl.ack = { sq: a.sq, ok: r.ok, err: r.err || null, k: a.k, p: i, S: r.S || 0, x: r.x ? Math.round(r.x) : 0, sc: r.score != null ? r.score : null };
     return r;
@@ -253,6 +292,7 @@
       p.nz = clamp(p.nz * 0.94 + VOLS[p.h] * p.vm * norm(R) + p.tr, -0.45, 0.45);
       setPrice(G, i);
     }
+    fiStep(G);
     if (G.cfg.news) newsStep(G);
     trackPlayers(G);
     if (G.sc % (G.cfg.bar || 5) === 0) closeBars(G, G.t + 1);
@@ -261,7 +301,7 @@
     for (const id of G.ord) { const pl = G.pl[id], w = netWorth(G, pl), c = pl.nc; c[3] = w; if (w > c[1]) c[1] = w; if (w < c[2]) c[2] = w; }
   }
   function closeBars(G, y) {
-    for (const p of G.pr) { const c = p.cc; p.cd.push([G.bn, round(c[0], 2), round(c[1], 2), round(c[2], 2), round(c[3], 2), y]); p.cc = [p.P, p.P, p.P, p.P]; }
+    for (const p of G.pr.concat(G.fi)) { const c = p.cc; p.cd.push([G.bn, round(c[0], 2), round(c[1], 2), round(c[2], 2), round(c[3], 2), y]); p.cc = [p.P, p.P, p.P, p.P]; }
     G.bn++;
   }
 
@@ -356,6 +396,8 @@
       const g = nextGate(G, i);
       if (g != null && g === t) resolveGate(G, i, news);
     }
+    for (const pl of Object.values(G.pl)) for (let k = 0; k < NF; k++) { const f = G.fi[k], n = pl.hold[NP + k]; if (f.cpn > 0 && n > 0 && t <= T) { const c = n * 100 * f.cpn; pl.cash += c; pl.rp[NP + k] += c; pl.cp = (pl.cp || 0) + c; } }
+    G.rt.rT *= 0.6; G.rt.sT *= 0.6;
     // 3. macro multipliers drift back towards their targets
     for (let h = 0; h < 3; h++) G.mac[h] += (G.macT[h] - G.mac[h]) * 0.25;
     // 4. targets (gate results jump, everything else glides)
@@ -364,6 +406,7 @@
     if (t >= T) settle(G, news);
     if (G.ph !== 'end') G.maj = news.filter(n => n.m).map(n => ({ x: n.x, c: n.c, k: n.k }));
     pushNews(G, news, t);
+    fiPrices(G); for (const f of G.fi) { if (G.ph === 'end' && f.kind === 'bond') f.P = 100; f.pp = f.pp; touch(f); f.ph.push(round(f.P, 2)); }
     for (const p of G.pr) { p.pp = p.pp; touch(p); p.ph.push(round(p.P, 2)); }
     trackPlayers(G);
     closeBars(G, t);
@@ -395,13 +438,16 @@
   function fire(G, k, news) {
     const R = () => rnd(G);
     if (k === 'hype') {
+      G.rt.rT = 0.006; G.rt.sT = -0.004; news.push({ x: 'Bonds: investors want risk, State Bond slips', c: -1 });
       G.mac[2] *= 1.30; G.macT[2] = 1.0; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [0, 0.03, 0.09][p.h - 1]); });
       news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'winter') {
+      G.rt.rT = 0.015; G.rt.sT = 0.012; news.push({ x: 'Bonds fall as rates jump, Corporate Bond hit hardest', c: -1 });
       G.mac[0] *= 0.93; G.mac[1] *= 0.86; G.mac[2] *= 0.74; G.macT = [0.97, 0.94, 0.88];
       G.fc = 0.35; G.fcUntil = G.t + 3; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [-0.05, -0.08, -0.12][p.h - 1]); });
       news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'disrupt') {
+      G.rt.rT = -0.006; G.rt.sT = 0.006; news.push({ x: 'Nervous investors buy State Bonds, Corporate Bond weakens', c: -1 });
       G.mac[0] *= 0.88; G.macT[0] = Math.min(G.macT[0], 0.9); G.mac[1] *= 1.06; G.macT[1] = Math.max(G.macT[1], 1.0); G.pr.forEach(p => { if (p.st === 'live' && p.h < 3) shock(G, p.i, p.h === 1 ? -0.09 : 0.04); });
       news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1, m: 1, k: 'mkt' });
     } else if (k === 'rumour') {
@@ -430,6 +476,7 @@
     for (const p of G.pr) {
       if (p.st === 'live') { p.P = p.v; p.A = p.v; p.At = p.v; p.z = 0; p.nz = 0; p.st = 'exit'; p.exitV = p.v; touch(p); }
     }
+    G.rt.r = 0; G.rt.sp = 0; G.rt.rT = 0; G.rt.sT = 0; fiPrices(G); for (const f of G.fi) { if (f.kind === 'bond') f.P = 100; f.st = 'exit'; touch(f); }
     news.push({ x: 'Game over: final payouts made', c: -1 });
   }
 
@@ -440,17 +487,17 @@
   function pub(G) {
     const lb = leaderboard(G);
     return {
-      ph: G.ph, t: G.t, T: G.T, n: G.ord.length, P: G.pr.map(p => round(p.P, 2)), pp: G.pr.map(p => round(p.pp, 2)), fl: G.pr.map(p => Math.round(p.flow)), st: G.pr.map(p => p.st),
-      cb: G.pr.map(p => p.cc.map(x => round(x, 2))), bars: G.pr.map(p => p.cd.slice(-2)), bn: G.bn, sc: G.sc, yl: G.yl,
+      ph: G.ph, t: G.t, T: G.T, n: G.ord.length, P: G.pr.concat(G.fi).map(p => round(p.P, 2)), pp: G.pr.concat(G.fi).map(p => round(p.pp, 2)), fl: G.pr.map(p => Math.round(p.flow)).concat(G.fi.map(() => 0)), st: G.pr.concat(G.fi).map(p => p.st),
+      cb: G.pr.concat(G.fi).map(p => p.cc.map(x => round(x, 2))), bars: G.pr.concat(G.fi).map(p => p.cd.slice(-2)), bn: G.bn, sc: G.sc, yl: G.yl,
       nw: G.news.slice(0, 5), rc: G.ord.filter(id => !G.pl[id].bot && G.pl[id].rdy).length, hc: G.ord.filter(id => !G.pl[id].bot).length,
       tape: G.tape.slice(0, 12), w: lb.map(x => Math.round(x.w / 100) * 100), top: lb.slice(0, 10).map(x => [x.n, Math.round(x.w), x.bot ? 1 : 0]), cnt: lb.length,
     };
   }
-  function hx(G) { return { bn: G.bn, b: G.pr.map(p => p.cd) }; }
+  function hx(G) { return { bn: G.bn, b: G.pr.concat(G.fi).map(p => p.cd) }; }
   function tk(G) { // slow-changing snapshot
     return {
       tickSec: G.cfg.tickSec, t: G.t, T: G.T, ph: G.ph, K: Math.round(G.K), cash0: G.cfg.cash0, fee: G.cfg.fee, ddCost: G.cfg.ddCost, maxExp: G.cfg.maxExp, bar: G.cfg.bar || 5,
-      news: G.news.slice(0, 40),
+      news: G.news.slice(0, 40), fi: G.fi.map(f => ({ code: f.code, name: f.name, kind: f.kind, cpn: f.cpn, st: f.st, line: ALL[f.i].line })),
       pr: G.pr.map(p => ({ v: round(p.v, 2), stage: p.stage, st: p.st, cash: Math.round(p.cash), burn: Math.round(p.burn), gate: nextGate(G, p.i), gates: p.gates, gi: p.gi, obs: p.obs.map(o => Math.round(o * 100)), cons: round(consensus(G, p.i), 3), ph: p.ph, flowP: Math.round(p.flowP), D: Math.round(p.D), vol: Math.round(p.vol), ups: p.ups, cls: Math.round(p.cls), exitV: p.exitV != null ? round(p.exitV, 2) : null, ps: round(psi(G, p.i), 2), gl: p.gl })),
       fin: G.ph === 'end' ? finals(G) : null,
       db: G.ph === 'end' ? debrief(G) : null,
@@ -459,13 +506,13 @@
   function finals(G) {
     return leaderboard(G).map(x => {
       const pl = G.pl[x.id], h = [];
-      for (let i = 0; i < NP; i++) { if (pl.seen.indexOf(i) < 0) continue; const v = pl.hold[i] * G.pr[i].P; h.push([i, pl.hold[i], Math.round(v), Math.round(v - pl.cost[i] + pl.rp[i])]); }
-      return { n: x.n, b: x.bot ? 1 : 0, w: Math.round(x.w), c: Math.round(pl.cash), tr: pl.tr, rp: pl.ddn, h };
+      for (let i = 0; i < NA; i++) { if (pl.seen.indexOf(i) < 0) continue; const v = pl.hold[i] * (i < NP ? G.pr[i].P : G.fi[i - NP].P); h.push([i, pl.hold[i], Math.round(v), Math.round(v - pl.cost[i] + pl.rp[i])]); }
+      return { n: x.n, b: x.bot ? 1 : 0, w: Math.round(x.w), c: Math.round(pl.cash), tr: pl.tr, rp: pl.ddn, cp: Math.round(pl.cp || 0), h };
     });
   }
   function priv(G, pid) {
     const pl = G.pl[pid]; if (!pl) return null;
-    return { id: pl.id, name: pl.name, cash: round(pl.cash, 2), hold: pl.hold, cost: pl.cost.map(x => round(x, 0)), dd: pl.dd, nw: round(netWorth(G, pl), 0), tr: pl.tr, ack: pl.ack, nwc: pl.nwc, rdy: pl.rdy, rank: leaderboard(G).findIndex(x => x.id === pid) + 1, n: G.ord.length };
+    return { id: pl.id, name: pl.name, cash: round(pl.cash, 2), hold: pl.hold, cost: pl.cost.map(x => round(x, 0)), dd: pl.dd, nw: round(netWorth(G, pl), 0), tr: pl.tr, ack: pl.ack, nwc: pl.nwc, cp: Math.round(pl.cp || 0), rdy: pl.rdy, rank: leaderboard(G).findIndex(x => x.id === pid) + 1, n: G.ord.length };
   }
 
   function yearCandles(p) {
@@ -535,6 +582,6 @@
     }
   }
 
-  const API = { fakeTip, open, resize, second, pushNews, hx, finals, yearCandles, EVN, recomputeAll, debrief, HP, PROJ, NP, STAGES, DEF, BOTS, hash, rndS, clamp, round, pGate, newGame, addPlayer, start, act, advance, netWorth, leaderboard, pub, tk, priv, consensus, baseAnchor, psi, nextGate, need, quoteBuy, quoteSell, sharesForCash, maxBuyShares, tryBuy, trySell, tryDD, botAct, fire, setupMarket, snapshot, evMult };
+  const API = { fakeTip, open, resize, second, pushNews, hx, finals, yearCandles, EVN, recomputeAll, debrief, HP, PROJ, NP, NF, NA, ALL, STAGES, DEF, BOTS, hash, rndS, clamp, round, pGate, newGame, addPlayer, start, act, advance, netWorth, leaderboard, pub, tk, priv, consensus, baseAnchor, psi, nextGate, need, quoteBuy, quoteSell, sharesForCash, maxBuyShares, tryBuy, trySell, tryDD, botAct, fire, setupMarket, snapshot, evMult };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.DC = API;
 })(typeof self !== 'undefined' ? self : this);

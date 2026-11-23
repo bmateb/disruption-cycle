@@ -1,5 +1,5 @@
 /* student client and company detail (the detail view is also used by the host) */
-const C = { room: '', url: '', net: null, me: null, pub: null, pubV: null, tk: null, priv: null, privNet: null, off: 0, st: 'down', tab: 'market', sel: null, side: 'buy', amt: 5000, sell: 0.5, pending: null, sq: Date.now(), lastPubAt: 0, lastAck: 0, gotPriv: false, belief: {}, dirty: false, tf: 'live', bars: [[], [], [], [], [], [], [], [], [], [], [], []], news: [], newsSeen: 0, newsInit: false, openP: new Set(), prac: null, rdy: false, rdyAt: 0, nc: null, ncY: -1, phSeen: null, lastNews: 0 };
+const C = { room: '', url: '', net: null, me: null, pub: null, pubV: null, tk: null, priv: null, privNet: null, off: 0, st: 'down', tab: 'market', sel: null, side: 'buy', amt: 5000, sell: 0.5, pending: null, sq: Date.now(), lastPubAt: 0, lastAck: 0, gotPriv: false, belief: {}, dirty: false, tf: 'live', bars: Array.from({ length: 15 }, () => []), news: [], newsSeen: 0, newsInit: false, openP: new Set(), prac: null, rdy: false, rdyAt: 0, nc: null, ncY: -1, phSeen: null, lastNews: 0 };
 
 function nowHost() { return Date.now() + C.off; }
 function PV() { return C.pubV || C.pub; }
@@ -22,12 +22,12 @@ function eventLog(q) { return q.gl.map((g, k) => ({ t: g.t, ok: g.ok, k: EVS[k] 
 
 /* shared candle block for a company */
 function candleBlock(i, o) { // o: {tf, bars, cur, curY, tk, key, w, h}
-  const q = o.tk.pr[i], mode = o.tf === 'year' ? 'year' : 'live';
+  const q = i >= DC.NP ? { st: 'live', gl: [] } : o.tk.pr[i], mode = o.tf === 'year' ? 'year' : 'live';
   const live = q.st === 'live';
   const b = buildCandles(o.bars, live ? o.cur : null, o.curY, mode, eventLog(q), mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : 0);
   const tg = '<div class="seg tf"><button class="' + (mode === 'live' ? 'on' : '') + '" data-act="tf" data-m="live">Live · 5 s candles</button><button class="' + (mode === 'year' ? 'on' : '') + '" data-act="tf" data-m="year">By year</button></div>';
   return '<div class="row" style="justify-content:space-between;margin:8px 0 2px">' + tg + '<span class="small faint">green = rose · red = fell</span></div>' +
-    candleChart({ cs: b.cs, marks: b.marks, xl: b.xl, slots: mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : o.tk.T, w: o.w || 380, h: o.h || 190, floor0: true, minRange: (o.last || 10) * 0.015, last: o.last, label: DC.PROJ[i].name + ' price candles' });
+    candleChart({ cs: b.cs, marks: b.marks, xl: b.xl, slots: mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : o.tk.T, w: o.w || 380, h: o.h || 190, floor0: true, minRange: (o.last || 10) * 0.015, last: o.last, label: DC.ALL[i].name + ' price candles' });
 }
 
 /* ---------- company detail ---------- */
@@ -57,12 +57,14 @@ function detailTop(i, pub, tk, priv, isHost, ctx) {
   return h + '</div>';
 }
 function valHTML(i, pub, tk, priv) {
+  if (i >= DC.NP) return '';
   const q = tk.pr[i]; if (q.st !== 'live') return '';
   const sc = priv && priv.dd && priv.dd[i] != null ? priv.dd[i] : Math.round(q.cons * 100);
   const cur = C.belief[i] != null ? C.belief[i] : sc;
   return '<div class="ticket"><h3>Fair value estimator</h3><p class="small muted">Set your own view of the company’s score. The estimator weighs the chance of each remaining event, discounts to the end and compares with today’s price. It ignores market mood and news.</p><div class="row"><input class="slider" id="vq" type="range" min="10" max="95" value="' + cur + '" style="flex:1"><b class="mono" id="vqv">' + cur + '</b></div><div class="quote"><span>Fair value per share</span><span id="vmv"></span><span>Price now</span><span id="vmp"></span><span>Upside</span><span id="vmu"></span></div></div>';
 }
 function valUpdate(i) {
+  if (i >= DC.NP) return;
   const pub = PV(), tk = C.tk; if (!pub || !tk || !$('#vq')) return; const q = tk.pr[i], d = DC.PROJ[i], H = DC.HP[d.h];
   const s = +$('#vq').value; C.belief[i] = s; $('#vqv').textContent = s;
   const rem = q.gates.length - q.gi, pg = DC.pGate(d.h, s / 100, q.ps);
@@ -72,12 +74,13 @@ function valUpdate(i) {
 
 /* ---------- order ticket ---------- */
 function ticketMax(i) {
+  if (i >= DC.NP) { const P0 = PV().P[i]; return Math.max(0, Math.floor(C.priv.cash / (P0 * (1 + C.tk.fee * 0.4)))); }
   const pub = PV(), tk = C.tk, p = C.priv, q = tk.pr[i], P = pub.P[i]; if (q.st !== 'live') return 0;
   const ok = S => { const u = S * P / q.D; if (u >= 0.95) return false; const x = -q.D * Math.log(1 - u), cost = x * (1 + tk.fee); if (cost > p.cash + 1e-9) return false; const Pn = P * Math.exp(x / q.D); let oth = 0; for (let k = 0; k < p.hold.length; k++) if (k !== i && p.hold[k]) oth += p.hold[k] * pub.P[k]; const pos = (p.hold[i] + S) * Pn; return pos <= tk.maxExp * ((p.cash - cost) + pos + oth) + 1e-6; };
   let lo = 0, hi = Math.floor(0.94 * q.D / P); while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (ok(m)) lo = m; else hi = m - 1; } return lo;
 }
 function ticketHTML(i) {
-  const q = C.tk.pr[i]; if (q.st !== 'live') return '';
+  const q = i >= DC.NP ? { st: 'live' } : C.tk.pr[i]; if (q.st !== 'live') return '';
   const amts = [2000, 5000, 10000, 25000];
   return '<div class="ticket"><div class="row"><div class="seg"><button class="buy' + (C.side === 'buy' ? ' on' : '') + '" data-act="side" data-s="buy">Buy</button><button class="sell' + (C.side === 'sell' ? ' on' : '') + '" data-act="side" data-s="sell">Sell</button></div><span class="spacer"></span><span class="small muted">Cash <b id="tcash" class="mono"></b></span></div>' +
     (C.side === 'buy' ? '<div class="amts">' + amts.map(a => '<button class="btn sm' + (C.amt === a ? ' on' : '') + '" data-act="amt" data-a="' + a + '">' + eurK(a) + '</button>').join('') + '<button class="btn sm' + (C.amt === 'max' ? ' on' : '') + '" data-act="amt" data-a="max">Max</button><input id="tcu" type="number" inputmode="numeric" min="0" step="500" placeholder="€ custom" style="width:100px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:4px 8px;min-height:30px"></div>'
@@ -85,6 +88,11 @@ function ticketHTML(i) {
     '<div class="quote" id="tq"></div><div id="tw"></div><button class="btn pri" id="tgo" data-act="exec" style="width:100%"></button><p class="small faint" style="margin:6px 0 0">The price moves every second, so your fill can differ slightly from this quote.</p></div>';
 }
 function quoteState(i) {
+  if (i >= DC.NP) { // bonds and index: fair price, no price impact, smaller fee
+    const P = PV().P[i], fr = C.tk.fee * 0.4, p = C.priv; let S;
+    if (C.side === 'buy') { const amt = C.amt === 'max' ? 1e12 : C.amt === 'cust' ? (C.custom || 0) : C.amt; S = Math.floor(Math.min(amt, p.cash) / (P * (1 + fr))); if (S < 1) return { S: 0, x: 0, fee: 0, tot: 0, avg: P, ok: false, warn: 'Amount too small or not enough cash.' }; const x = S * P; return { S, x, fee: x * fr, tot: x * (1 + fr), avg: P, ok: true, warn: '' }; }
+    S = Math.floor(p.hold[i] * C.sell); if (S < 1) return { S: 0, x: 0, fee: 0, tot: 0, avg: P, ok: false, warn: 'You hold none of this.' }; const x = S * P; return { S, x, fee: x * fr, tot: x * (1 - fr), avg: P, ok: true, warn: '' };
+  }
   const pub = PV(), tk = C.tk, p = C.priv, q = tk.pr[i], P = pub.P[i]; let S = 0, x = 0, ok = true, warn = '';
   if (C.side === 'buy') {
     let amt = C.amt === 'max' ? 1e12 : C.amt; if (C.amt === 'cust') amt = C.custom || 0;
@@ -98,22 +106,26 @@ function quoteState(i) {
   x = q.D * Math.log(1 + S * P / q.D); const fee = x * tk.fee; return { S, x, fee, tot: x - fee, avg: x / S, ok: true, warn: '' };
 }
 function ticketUpdate() {
-  const i = C.sel; if (i == null || !C.pub || !C.tk || !C.priv || !$('#tq')) return; const q = C.tk.pr[i]; if (q.st !== 'live') return;
+  const i = C.sel; if (i == null || !C.pub || !C.tk || !C.priv || !$('#tq')) return; const q = i >= DC.NP ? { st: 'live' } : C.tk.pr[i]; if (q.st !== 'live') return;
   const r = quoteState(i), P = PV().P[i], ph = C.pub.ph; $('#tcash').textContent = eur(C.priv.cash);
   const slip = r.S ? r.avg / P - 1 : 0;
   $('#tq').innerHTML = C.side === 'buy' ? '<span>Shares</span><span>' + r.S + '</span><span>Average price</span><span>€' + (r.S ? px(r.avg) : '—') + ' <span class="' + (slip > 0.02 ? 'wn' : '') + '">(' + pct(slip, 1) + ' price impact)</span></span><span>Fee</span><span>' + eur(r.fee) + '</span><span><b>You pay</b></span><span><b>' + eur(r.tot) + '</b></span>' :
     '<span>Shares</span><span>' + r.S + ' of ' + C.priv.hold[i] + '</span><span>Average price</span><span>€' + (r.S ? px(r.avg) : '—') + ' <span class="' + (slip < -0.02 ? 'wn' : '') + '">(' + pct(slip, 1) + ' price impact)</span></span><span>Fee</span><span>' + eur(r.fee) + '</span><span><b>You receive</b></span><span><b>' + eur(r.tot) + '</b></span>';
   $('#tw').innerHTML = r.warn ? '<div class="note warn">' + esc(r.warn) + '</div>' : '';
-  const b = $('#tgo'); b.textContent = (ph === 'prep' ? 'Practice ' : '') + (C.side === 'buy' ? 'Buy ' : 'Sell ') + r.S + ' ' + DC.PROJ[i].code; b.className = 'btn ' + (C.side === 'buy' ? 'pri' : 'sell'); b.disabled = !r.ok || !!C.pending || (ph !== 'run' && ph !== 'prep');
+  const b = $('#tgo'); b.textContent = (ph === 'prep' ? 'Practice ' : '') + (C.side === 'buy' ? 'Buy ' : 'Sell ') + r.S + ' ' + DC.ALL[i].code; b.className = 'btn ' + (C.side === 'buy' ? 'pri' : 'sell'); b.disabled = !r.ok || !!C.pending || (ph !== 'run' && ph !== 'prep');
   if (ph === 'pause') $('#tw').innerHTML = '<div class="note warn">' + (C.pub.bk ? 'Planning break: trading reopens when the next year starts.' : 'Market paused by the host.') + '</div>';
 }
 
 /* ---------- practice mode: a private sandbox that never touches the real market ---------- */
-function pracNew() { return { cash: C.tk ? C.tk.cash0 : 100000, hold: new Array(12).fill(0), cost: new Array(12).fill(0), z: new Array(12).fill(0), dd: {}, tr: 0 }; }
+function pracNew() { return { cash: C.tk ? C.tk.cash0 : 100000, hold: new Array(DC.NA).fill(0), cost: new Array(DC.NA).fill(0), z: new Array(DC.NA).fill(0), dd: {}, tr: 0 }; }
 function pracPriv() { const p = C.prac; return { id: C.me.id, name: C.me.name, cash: p.cash, hold: p.hold, cost: p.cost, dd: p.dd, nw: 0, tr: p.tr, ack: null, nwc: [], rdy: C.rdy ? 1 : 0, rank: 1, n: 1 }; }
 function pracAct(a) {
-  const tk = C.tk, p = C.prac, i = a.p, q = tk.pr[i], P = PV().P[i]; let ack;
-  if (a.k === 'b') {
+  const tk = C.tk, p = C.prac, i = a.p, q = i >= DC.NP ? null : tk.pr[i], P = PV().P[i]; let ack;
+  if (i >= DC.NP) {
+    const fr = tk.fee * 0.4, x = a.s * P;
+    if (a.k === 'b') { p.cash -= x * (1 + fr); p.hold[i] += a.s; p.cost[i] += x * (1 + fr); } else { const f = a.s / p.hold[i]; p.cash += x * (1 - fr); p.cost[i] -= p.cost[i] * f; p.hold[i] -= a.s; }
+    p.tr++; ack = { ok: true, k: a.k, p: i, S: a.s, x: Math.round(x) };
+  } else if (a.k === 'b') {
     const x = -q.D * Math.log(1 - a.s * P / q.D), cost = x * (1 + tk.fee);
     p.cash -= cost; p.hold[i] += a.s; p.cost[i] += cost; p.z[i] += x / q.D; p.tr++; ack = { ok: true, k: 'b', p: i, S: a.s, x: Math.round(x) };
   } else if (a.k === 's') {
@@ -123,7 +135,7 @@ function pracAct(a) {
     if (p.dd[i] != null) return; if (p.cash < tk.ddCost) { toast('Not enough cash', true); return; }
     p.cash -= tk.ddCost; p.dd[i] = Math.max(5, Math.min(95, Math.round(q.cons * 100 + (Math.random() - 0.5) * 24))); ack = { ok: true, k: 'd', p: i, sc: p.dd[i] };
   }
-  C.priv = pracPriv(); toast('Practice: ' + (ack.k === 'b' ? 'bought ' + ack.S + ' ' + DC.PROJ[i].code + ' for ' + eur(ack.x) : ack.k === 's' ? 'sold ' + ack.S + ' ' + DC.PROJ[i].code + ' for ' + eur(ack.x) : 'report bought, score ' + ack.sc)); C.dirty = true; refreshView(); renderClient(true);
+  C.priv = pracPriv(); toast('Practice: ' + (ack.k === 'b' ? 'bought ' + ack.S + ' ' + DC.ALL[i].code + ' for ' + eur(ack.x) : ack.k === 's' ? 'sold ' + ack.S + ' ' + DC.ALL[i].code + ' for ' + eur(ack.x) : 'report bought, score ' + ack.sc)); C.dirty = true; refreshView(); renderClient(true);
 }
 function refreshView() { // practice view = frozen prices moved only by your own practice trades
   const pub = C.pub; if (!pub) return;
@@ -145,7 +157,7 @@ function pendingWatch() {
 function handleAck(a) {
   if (!a || a.sq <= C.lastAck) return; C.lastAck = a.sq;
   if (C.pending && C.pending.sq === a.sq) C.pending = null;
-  if (a.ok) { toast(a.k === 'b' ? 'Bought ' + a.S + ' ' + DC.PROJ[a.p].code + ' for ' + eur(a.x) : a.k === 's' ? 'Sold ' + a.S + ' ' + DC.PROJ[a.p].code + ' for ' + eur(a.x) : 'Report bought: score ' + a.sc); if (a.k === 'd') C.dirty = true; }
+  if (a.ok) { toast(a.k === 'b' ? 'Bought ' + a.S + ' ' + DC.ALL[a.p].code + ' for ' + eur(a.x) : a.k === 's' ? 'Sold ' + a.S + ' ' + DC.ALL[a.p].code + ' for ' + eur(a.x) : 'Report bought: score ' + a.sc); if (a.k === 'd') C.dirty = true; }
   else toast(a.err || 'Rejected', true);
   ticketUpdate();
 }
@@ -220,8 +232,18 @@ function tabsFor(ph) {
 }
 function guideHTML() {
   const g = (t, d) => '<div class="gl"><b>' + t + '</b><span>' + d + '</span></div>';
-  return '<div class="cols"><div class="panel"><h2>How to play in one minute</h2><div class="pb"><ol class="steps"><li><b>You have €100,000.</b> Spread it over 12 young companies. Each one will go through two funding rounds (Series A and B) and an IPO.</li><li><b>Prices move every second.</b> Buy when you think a company will rise, sell when you think it will fall. The arrow beside each price shows the last change.</li><li><b>Your trades move the price.</b> Buying pushes a price up for everyone, selling pushes it down. Big orders move it more.</li><li><b>Watch the news.</b> Short headlines hint at what is coming: funding rounds, IPOs, market-wide events. Tap a headline to open the company.</li><li><b>Rounds and IPOs decide a lot.</b> If a company passes, its price jumps. If it fails, the price collapses to about 5%.</li><li><b>At the end every company is paid out</b> at its real value. The player with the highest portfolio value wins.</li></ol><div class="note">You may put at most 40% of your portfolio into one company. Each trade costs a 0.5% fee.</div></div></div>' +
-    '<div class="panel"><h2>Words you will see</h2><div class="pb gloss">' + g('Price', 'What one share costs right now, in euros.') + g('Change', 'How much the price moved since a second ago, with the percent.') + g('Since open', 'Change since the market opened.') + g('Volume', 'Total money traded in this company.') + g('Net buying', 'Money bought minus money sold this year. Positive means more buyers.') + g('Candle', 'One bar of the price chart: the box runs from the open to the close, the thin line shows the high and the low. Green = price rose, red = fell.') + g('Series A / B', 'Funding rounds where investors decide whether to back the company.') + g('IPO', 'Initial public offering: the company lists on the stock market. A big make-or-break moment.') + g('Portfolio value', 'Your cash plus the value of all your shares.') + g('Profit / loss', 'Portfolio value now minus what you started with.') + g('Analyst report', 'A private score for one company. It costs €1,500 and is sharper than the public score.') + g('Liquidity', 'How much money it takes to move a price. Low liquidity means your trade moves it more.') + '</div></div></div>';
+  return '<div class="cols"><div class="panel"><h2>How to play in one minute</h2><div class="pb"><ol class="steps"><li><b>You have €100,000.</b> Spread it over 12 young companies, two bonds and an index fund. Each one will go through two funding rounds (Series A and B) and an IPO.</li><li><b>Prices move every second.</b> Buy when you think a company will rise, sell when you think it will fall. The arrow beside each price shows the last change.</li><li><b>Your trades move the price.</b> Buying pushes a price up for everyone, selling pushes it down. Big orders move it more.</li><li><b>Watch the news.</b> Short headlines hint at what is coming: funding rounds, IPOs, market-wide events. Tap a headline to open the company.</li><li><b>Rounds and IPOs decide a lot.</b> If a company passes, its price jumps. If it fails, the price collapses to about 5%.</li><li><b>At the end every company is paid out</b> at its real value. The player with the highest portfolio value wins.</li></ol><div class="note">You may put at most 40% of your portfolio into one company. Each trade costs a 0.5% fee.</div></div></div>' +
+    '<div class="panel"><h2>Words you will see</h2><div class="pb gloss">' + g('Price', 'What one share costs right now, in euros.') + g('Bond', 'A loan you give. It pays a fixed coupon every year and is repaid at €100 at the end. Its price falls when interest rates rise.') + g('Index fund', 'One holding that owns all twelve companies equally. It follows the whole market.') + g('Change', 'How much the price moved since a second ago, with the percent.') + g('Since open', 'Change since the market opened.') + g('Volume', 'Total money traded in this company.') + g('Net buying', 'Money bought minus money sold this year. Positive means more buyers.') + g('Candle', 'One bar of the price chart: the box runs from the open to the close, the thin line shows the high and the low. Green = price rose, red = fell.') + g('Series A / B', 'Funding rounds where investors decide whether to back the company.') + g('IPO', 'Initial public offering: the company lists on the stock market. A big make-or-break moment.') + g('Portfolio value', 'Your cash plus the value of all your shares.') + g('Profit / loss', 'Portfolio value now minus what you started with.') + g('Analyst report', 'A private score for one company. It costs €1,500 and is sharper than the public score.') + g('Liquidity', 'How much money it takes to move a price. Low liquidity means your trade moves it more.') + '</div></div></div>';
+}
+function fiTop(i, pub, tk, priv, isHost, ctx) {
+  const d = DC.ALL[i], f = tk.fi[i - DC.NP], P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, so = P / 100 - 1, bond = f.kind === 'bond';
+  let h = '<div class="ph"><div><h2 style="padding:0;border:0">' + d.code + ' · ' + esc(d.name) + '</h2><div class="small muted">' + esc(f.line) + '</div></div><span class="spacer"></span><span class="chip">' + (bond ? 'Bond' : 'Index fund') + '</span></div><div class="pb">';
+  h += '<div class="row" style="align-items:baseline;gap:12px"><b class="mono bigpx' + flashCls('d' + i, P) + '">€' + px(P) + '</b>' + chgHTML(P, pp) + '<span class="spacer"></span><span class="small ' + cls(so) + ' mono">since open ' + pct(so, 1) + '</span></div>';
+  h += candleBlock(i, { tf: ctx.tf, bars: ctx.bars[i], cur: pub.cb && pub.ph !== 'prep' ? pub.cb[i] : null, curY: Math.min(pub.t + 1, pub.T), tk: tk, last: P });
+  h += '<div class="facts">' + (bond ? '<div class="fact"><span>Yearly coupon</span><b>€' + (f.cpn * 100).toFixed(0) + ' per unit (' + Math.round(f.cpn * 100) + '%)</b></div><div class="fact"><span>Paid out</span><b>Every year end, in cash</b></div><div class="fact"><span>Repaid at the end</span><b>€100 per unit</b></div><div class="fact"><span>Price falls when</span><b>' + (i === DC.NP ? 'interest rates rise' : 'rates rise or investors panic') + '</b></div>'
+    : '<div class="fact"><span>What it holds</span><b>All 12 companies, equal parts</b></div><div class="fact"><span>Pays coupons</span><b>No</b></div><div class="fact"><span>Failed company</span><b>Index loses 1/12 of its weight</b></div><div class="fact"><span>Price impact</span><b>None, you trade at the index value</b></div>') +
+    '<div class="fact"><span>Fee</span><b>' + (tk.fee * 40).toFixed(1) + '% per trade</b></div></div>';
+  return h + '</div>';
 }
 function annHTML(pub, open, now) { // dropdown shown during a frozen break: major news of the year just finished
   const items = pub.mj || [], left = mmss(pub.bk - now);
@@ -280,7 +302,7 @@ function renderClient(force) {
     if (C.sel == null) { if (!narrow) dt.innerHTML = '<div class="pb"><h2>Pick a company</h2><p class="muted">Each company is a young business that needs funding. Read its cash, news and next event, then buy or sell. Every trade moves the price for everybody.</p><div class="note"><b>The rules in short.</b> Prices change every second with trading and news. At each funding round and at the IPO a company either passes and its price jumps, or fails and loses almost everything. At the end every survivor is paid out at its real value. You may hold at most ' + Math.round(tk.maxExp * 100) + '% of your portfolio in one company.</div></div>'; else dt.innerHTML = ''; }
     else {
       const i = C.sel; if (C.rebuiltDt || !$('#dtTop')) { dt.innerHTML = (narrow ? '<div class="ph"><button class="btn sm" data-act="back">← Market</button></div>' : '') + '<div id="dtTop"></div><div class="pb" style="padding-top:0"><div id="dtTkt">' + ticketHTML(i) + '</div><div id="dtVal">' + valHTML(i, P, tk, C.priv) + '</div></div>'; C.rebuiltDt = false; }
-      $('#dtTop').innerHTML = detailTop(i, P, tk, C.priv, false, { tf: C.tf, bars: C.bars }); valUpdate(i); ticketUpdate();
+      $('#dtTop').innerHTML = (i >= DC.NP ? fiTop : detailTop)(i, P, tk, C.priv, false, { tf: C.tf, bars: C.bars }); valUpdate(i); ticketUpdate();
     }
   } else if (C.tab === 'port') { body.innerHTML = portHTML(P, tk); body.dataset.k = sig; }
   else if (C.tab === 'news') { body.innerHTML = '<div class="cols"><div class="panel"><h2>Headlines <span class="small faint">tap one to open the company</span></h2><div class="pb">' + newsFeed(C.news, 40) + '</div></div><div class="panel"><h2>Live trades from the whole class</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div>'; body.dataset.k = sig; }
@@ -289,14 +311,14 @@ function renderClient(force) {
   else if (C.tab === 'results') { body.innerHTML = resultsHTML(tk, C.me.name, C.openP) + debriefHTML(tk.db); body.dataset.k = sig; }
 }
 function portHTML(pub, tk) {
-  const p = C.priv, nw = liveNW(), pv = prevNW(); let rows = '', invested = 0; const hz = [0, 0, 0];
-  for (let i = 0; i < DC.NP; i++) { const s = p.hold[i]; if (!s) continue; const v = s * pub.P[i], d = DC.PROJ[i], pl = v - p.cost[i]; invested += v; hz[d.h - 1] += v; const pp = pub.pp ? pub.pp[i] : pub.P[i]; rows += '<tr class="mk" data-i="' + i + '" data-act="goto"><td><span class="pn"><span class="hd h' + d.h + 'c"></span>' + d.code + '</span><span class="ps">' + s + ' shares</span></td><td>' + eurK(v) + '</td><td class="hm">' + px(p.cost[i] / s) + '</td><td class="pxc">' + px(pub.P[i]) + '<br>' + chgHTML(pub.P[i], pp) + '</td><td class="' + cls(pl) + '">' + eurS(pl) + '<span class="ps">' + pct(p.cost[i] ? v / p.cost[i] - 1 : 0, 1) + '</span></td><td class="hm">' + Math.round(v / nw * 100) + '%</td></tr>'; }
+  const p = C.priv, nw = liveNW(), pv = prevNW(); let rows = '', invested = 0; const hz = [0, 0, 0, 0];
+  for (let i = 0; i < DC.NA; i++) { const s = p.hold[i]; if (!s) continue; const v = s * pub.P[i], d = DC.ALL[i], pl = v - p.cost[i]; invested += v; hz[(d.h || 4) - 1] += v; const pp = pub.pp ? pub.pp[i] : pub.P[i]; rows += '<tr class="mk" data-i="' + i + '" data-act="goto"><td><span class="pn">' + (d.h ? '<span class="hd h' + d.h + 'c"></span>' : '') + d.code + '</span><span class="ps">' + s + (i >= DC.NP ? ' units' : ' shares') + '</span></td><td>' + eurK(v) + '</td><td class="hm">' + px(p.cost[i] / s) + '</td><td class="pxc">' + px(pub.P[i]) + '<br>' + chgHTML(pub.P[i], pp) + '</td><td class="' + cls(pl) + '">' + eurS(pl) + '<span class="ps">' + pct(p.cost[i] ? v / p.cost[i] - 1 : 0, 1) + '</span></td><td class="hm">' + Math.round(v / nw * 100) + '%</td></tr>'; }
   const cs = []; const nwc = p.nwc || [];
   nwc.forEach((c, k) => cs.push({ o: c[0], h: c[1], l: c[2], c: c[3], lab: 'Year ' + (k + 1) }));
   if (pub.ph === 'run' || pub.ph === 'pause') cs.push({ o: C.nc[0], h: C.nc[1], l: C.nc[2], c: C.nc[3], live: true, lab: 'This year' });
   const xl = cs.map((c, k) => [k, String(k + 1)]);
   let h = '<div class="cols"><div style="display:grid;gap:14px"><div class="panel"><h2>Portfolio value</h2><div class="pb"><div class="row" style="align-items:baseline;gap:10px"><b class="mono bigpx">' + eur(nw) + '</b><span class="' + cls(nw - tk.cash0) + ' mono">' + eurS(nw - tk.cash0) + ' (' + pct(nw / tk.cash0 - 1, 1) + ')</span>' + (pub.ph === 'run' ? '<span class="chg ' + cls(nw - pv) + '">' + arrow(nw - pv) + ' ' + eur(Math.abs(nw - pv)) + '</span>' : '') + '</div>' + candleChart({ cs: cs, xl: xl, hline: tk.cash0, slots: tk.T, w: 380, h: 160, minRange: tk.cash0 * 0.05, yfmt: v => (v / 1000).toFixed(1) + 'k', label: 'portfolio value by year' }) + '<p class="small muted">One candle per year. Dotted line = your starting €' + (tk.cash0 / 1000) + 'k. Cash ' + eur(p.cash) + ' · shares ' + eur(invested) + ' · trades ' + p.tr + '</p></div></div>' +
-    '<div class="panel"><h2>Mix by risk class</h2><div class="pb">' + stackBar([{ v: hz[0], c: 'var(--h1)', l: 'Low risk' }, { v: hz[1], c: 'var(--h2)', l: 'Medium risk' }, { v: hz[2], c: 'var(--h3)', l: 'High risk' }, { v: p.cash, c: 'var(--line)', l: 'Cash' }]) + '<p class="small muted" style="margin-top:8px">A common rule of thumb for innovation: roughly 70% low risk, 20% medium, 10% high.</p></div></div></div>' +
+    '<div class="panel"><h2>Mix by risk class</h2><div class="pb">' + stackBar([{ v: hz[0], c: 'var(--h1)', l: 'Low risk' }, { v: hz[1], c: 'var(--h2)', l: 'Medium risk' }, { v: hz[2], c: 'var(--h3)', l: 'High risk' }, { v: hz[3], c: 'var(--ink3)', l: 'Bonds & index' }, { v: p.cash, c: 'var(--line)', l: 'Cash' }]) + '<p class="small muted" style="margin-top:8px">A common rule of thumb for innovation: roughly 70% low risk, 20% medium, 10% high.' + (p.cp ? ' Bond coupons received so far: <b>' + eur(p.cp) + '</b>.' : '') + '</p></div></div></div>' +
     '<div class="panel"><h2>Your shares</h2>' + (rows ? '<table><thead><tr><th>Company</th><th>Value</th><th class="hm">Avg cost</th><th>Price</th><th>Profit / loss</th><th class="hm">Weight</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<div class="pb"><p class="muted">No shares yet. Open the Market tab and buy your first company.</p></div>') + '</div></div>';
   return h;
 }

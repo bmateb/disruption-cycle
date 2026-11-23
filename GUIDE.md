@@ -92,3 +92,18 @@ Live market game for the "Financing of innovation" session. Every student invest
 - **Landing page:** a student who opens the bare site address sees a **Rejoin your game** card for the last room.
 - **Host:** a **📱 Join QR** button in the header (and in the Controls tab) opens a large QR code, join code and link that you can show on the projector at any time.
 - The host sends a small heartbeat every 5 seconds, so phones can tell an idle pause from a dead connection.
+
+## Version 7: bonds and an index fund
+
+Three extra instruments sit under the company table on the Market tab. They trade at their fair price (no price impact) with a smaller fee (40% of the stock fee).
+
+| Code | What it is | Behaviour |
+|---|---|---|
+| GOVB State Bond | Safe loan to the government | Pays 3% of €100 every year end. Price falls when interest rates rise. |
+| CORB Corporate Bond | Loan to established firms | Pays 7% a year. Falls more than GOVB in a rate shock and when the index drops. |
+| DCX Disruption Index | Equal-weighted fund of all 12 companies | Starts at 100 and follows the average company price. A failed company drags it down by about 1/12 of its weight. |
+
+- Coupons are paid in cash at each year end and counted in the final profit/loss. Bonds are repaid at €100 at the end of the game.
+- The three macro events move rates: the funding winter (rates jump, bonds fall, corporate bond most), the deep-tech frenzy (State Bond slips), the disruptor event (flight to quality, corporate bond weakens). A short news line announces each move.
+- No concentration limit applies to these, so a student can park money in them as a safe base. Teaching hook: compare class portfolios with the 70-20-10 rule and ask who used the bonds and index to diversify.
+- They appear in portfolios, the results screen, the CSV and the host's "where the class money sits" chart (grey "Bonds & index").

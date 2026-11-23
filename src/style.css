@@ -248,3 +248,7 @@ td.pxc.fu,.bigpx.fu{animation:flu 1s ease-out} td.pxc.fd,.bigpx.fd{animation:fld
 @media (max-width:900px){ main.wrap.main{padding-bottom:calc(110px + env(safe-area-inset-bottom))} }
 /* v6.2: breathing room between stacked tiles on mobile */
 @media (max-width:900px){ #cbody>*+*,#hbody>*+*{margin-top:12px} #ticker+main.wrap.main,#banner+#ticker+main.wrap.main{padding-top:12px} #cbody .panel+.panel,#cbody .card+.card{margin-top:12px} }
+
+/* v7: bonds and index */
+.fihd{padding:10px 14px 6px;font-weight:700;border-top:1px solid var(--line);background:var(--sunk)}
+table.fit{margin-top:0}

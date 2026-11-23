@@ -22,7 +22,7 @@ const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt', OUT=__dirnam
   const ow=await ph.evaluate(()=>document.documentElement.scrollWidth); console.log('phone page width',ow,'(viewport 390)');
   await d.click('[data-act="tab"][data-t="market"]'); await d.click('tr.mk[data-i="2"]'); await d.waitForTimeout(800); await d.screenshot({path:OUT+'v3_desk.png'});
   // wait for year 1 end -> planning break
-  await ph.waitForFunction(()=>/Planning break/.test(document.querySelector('#ck').textContent),null,{timeout:40000}); console.log('break shown:',await ph.locator('#ck').innerText(),'|',(await ph.locator('.prac.plan').innerText()).slice(0,90));
+  await ph.waitForFunction(()=>/Planning break/.test(document.querySelector('#ck').textContent),null,{timeout:40000}); console.log('break shown:',await ph.locator('#ck').innerText(),'|',(await ph.locator('.ann .annh').innerText()).slice(0,90));
   await ph.click('#cnav [data-t="market"]'); await ph.evaluate(()=>{}); if(await ph.locator('button[data-act="back"]').count()) await ph.click('button[data-act="back"]'); await ph.waitForSelector('tr.mk[data-i="1"]'); const p1=await ph.locator('tr.mk[data-i="1"] td.pxc').innerText(); await ph.waitForTimeout(2500); const p2=await ph.locator('tr.mk[data-i="1"] td.pxc').innerText(); console.log('prices frozen during break:',p1===p2,p1,p2);
   await ph.screenshot({path:OUT+'v3_break.png'});
   await host.screenshot({path:OUT+'v3_host_break.png'}); console.log('host clock:',await host.locator('#hclk').innerText());

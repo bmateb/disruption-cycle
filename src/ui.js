@@ -86,6 +86,7 @@ function stackBar(parts) { // [{v,c,l}]
 
 /* ---------- market table ---------- */
 function projLabel(i, tk) {
+  if (i >= DC.NP) return { t: DC.ALL[i].kind === 'bond' ? 'Bond' : 'Index fund', c: '' };
   const q = tk.pr[i];
   if (q.st === 'dead') return { t: 'Failed', c: 'bad' };
   if (q.st === 'sold') return { t: 'Acquired', c: 'good' };
@@ -104,6 +105,14 @@ function marketTable(pub, tk, o) {
       '<td class="pxc' + (live ? flashCls(key + i, P) : '') + '"><b>' + px(P) + '</b></td><td>' + (live ? chgHTML(P, pp) : '') + '</td>' +
       '<td class="hm ' + cls(so) + '">' + pct(so, 1) + '</td>' +
       
+      (o.priv ? '<td>' + (mine ? '<b>' + mine + '</b><span class="ps">' + eurK(mine * P) + '</span>' : '<span class="faint">—</span>') + '</td>' : '') + '</tr>';
+  }
+  h += '</tbody></table>';
+  h += '<div class="fihd">Bonds and index fund <span class="small faint">fair price, no price impact · bonds pay a yearly coupon</span></div><table class="mt fit"><tbody>';
+  for (let i = DC.NP; i < DC.NA; i++) {
+    const d = DC.ALL[i], f = tk.fi[i - DC.NP], P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, so = P / 100 - 1, mine = o.priv ? o.priv.hold[i] : 0, live = f.st === 'live';
+    h += '<tr class="' + (o.priv ? 'mk' : '') + (o.sel === i ? ' sel' : '') + '" data-i="' + i + '"><td><span class="pn">' + d.code + ' <span class="faint" style="font-weight:500">' + esc(d.name) + '</span></span><span class="ps"><span class="chip">' + (f.kind === 'bond' ? 'Pays ' + Math.round(f.cpn * 100) + '% a year' : 'All 12 companies') + '</span></span></td>' +
+      '<td class="pxc' + (live ? flashCls(key + i, P) : '') + '"><b>' + px(P) + '</b></td><td>' + (live ? chgHTML(P, pp) : '') + '</td><td class="hm ' + cls(so) + '">' + pct(so, 1) + '</td><td class="hm"></td>' +
       (o.priv ? '<td>' + (mine ? '<b>' + mine + '</b><span class="ps">' + eurK(mine * P) + '</span>' : '<span class="faint">—</span>') + '</td>' : '') + '</tr>';
   }
   return h + '</tbody></table>';
@@ -132,7 +141,7 @@ function resultsHTML(tk, me, open, stub) {
     h += '<tr class="rr' + (x.n === me ? ' me' : '') + '" data-act="px" data-k="' + k + '"><td>' + (k + 1) + '</td><td style="text-align:left"><b>' + esc(x.n) + '</b>' + (x.b ? ' <span class="chip">bot</span>' : '') + '</td><td>' + eur(x.w) + '</td><td class="' + cls(pl) + '">' + eurS(pl) + '</td><td class="' + cls(pl) + '">' + pct(x.w / c0 - 1, 1) + '</td><td class="hm">' + x.tr + '</td><td class="chev">' + (isOpen ? '▾' : '▸') + '</td></tr>';
     if (isOpen) {
       h += '<tr class="rd"><td colspan="7"><table class="tbl-sm"><thead><tr><th style="text-align:left">Holding</th><th>Shares</th><th>Value</th><th>Profit / loss</th></tr></thead><tbody>' +
-        x.h.map(r => { const d = DC.PROJ[r[0]], q = tk.pr[r[0]], lab = projLabel(r[0], tk); return '<tr><td style="text-align:left"><span class="hd h' + d.h + 'c"></span><b>' + d.code + '</b> ' + esc(d.name) + ' <span class="chip ' + lab.c + '">' + lab.t + '</span></td><td>' + (r[1] || '—') + '</td><td>' + (r[1] ? eurK(r[2]) : '—') + '</td><td class="' + cls(r[3]) + '">' + eurS(r[3]) + '</td></tr>'; }).join('') +
+        x.h.map(r => { const d = DC.ALL[r[0]], lab = projLabel(r[0], tk); return '<tr><td style="text-align:left">' + (d.h ? '<span class="hd h' + d.h + 'c"></span>' : '') + '<b>' + d.code + '</b> ' + esc(d.name) + ' <span class="chip ' + lab.c + '">' + lab.t + '</span></td><td>' + (r[1] || '—') + '</td><td>' + (r[1] ? eurK(r[2]) : '—') + '</td><td class="' + cls(r[3]) + '">' + eurS(r[3]) + '</td></tr>'; }).join('') +
         '<tr><td style="text-align:left"><b>Cash</b></td><td>—</td><td>' + eurK(x.c) + '</td><td>—</td></tr><tr class="tot"><td style="text-align:left"><b>Total</b></td><td></td><td><b>' + eur(x.w) + '</b></td><td class="' + cls(pl) + '"><b>' + eurS(pl) + '</b></td></tr></tbody></table>' + (x.h.length ? '' : '<p class="small muted" style="padding:6px 8px">This investor never bought a share and kept all cash.</p>') + '</td></tr>';
     }
   });
@@ -140,7 +149,7 @@ function resultsHTML(tk, me, open, stub) {
 }
 function resultsCSV(tk) {
   const q = s => '"' + String(s).replace(/"/g, '""') + '"', rows = [['Rank', 'Investor', 'Final value EUR', 'Profit/Loss EUR', 'Return %', 'Cash EUR', 'Trades', 'Analyst reports', 'Holdings (shares/value EUR/P&L EUR)'].map(q).join(',')];
-  tk.fin.forEach((x, k) => rows.push([k + 1, q(x.n), x.w, x.w - tk.cash0, ((x.w / tk.cash0 - 1) * 100).toFixed(1), x.c, x.tr, x.rp, q(x.h.map(r => DC.PROJ[r[0]].code + ' ' + r[1] + '/' + r[2] + '/' + r[3]).join('; '))].join(',')));
+  tk.fin.forEach((x, k) => rows.push([k + 1, q(x.n), x.w, x.w - tk.cash0, ((x.w / tk.cash0 - 1) * 100).toFixed(1), x.c, x.tr, x.rp, q(x.h.map(r => DC.ALL[r[0]].code + ' ' + r[1] + '/' + r[2] + '/' + r[3]).join('; '))].join(',')));
   return rows.join('\r\n');
 }
 
