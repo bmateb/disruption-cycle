@@ -283,3 +283,6 @@ table.fit{margin-top:0}
 .mbox .mx{position:absolute;top:8px;right:10px;width:32px;height:32px;border:0;background:transparent;font-size:18px;color:var(--ink2);cursor:pointer;border-radius:8px}
 .mbox .mx:hover{background:var(--sunk)}
 .lgl{display:grid;gap:8px}.lgl>div{display:flex;align-items:center;gap:4px;font-size:15px}
+
+.lbt tr.lrow{cursor:pointer}.lbt tr.lrow:hover{background:var(--sunk)}.lbt .lname{text-decoration:underline dotted;text-underline-offset:3px}
+.mbox.wide.legend{max-width:680px}.mbox.wide.legend table td,.mbox.wide.legend table th{white-space:nowrap}

@@ -1,0 +1,14 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{const br=await chromium.launch();const errs=[];const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h}});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));return p;};
+const host=await mk(1500,900);await host.goto(BASE+'#host=1');await host.waitForSelector('#go');
+await host.selectOption('#sR','custom');await host.fill('#sU',BU);await host.fill('#sT','8');await host.fill('#sS','60');await host.fill('#sB','4');await host.fill('#sA',BASE);await host.uncheck('#sBk');
+await host.click('#go');await host.waitForSelector('#lstart');const link=await host.locator('.mono.small').first().innerText();
+const ph=await mk(390,844);await ph.goto(link);await ph.fill('#nm','Human');await ph.click('#nb');await ph.waitForSelector('.prac');await ph.click('button[data-act="rdy"]');
+await host.click('#lstart');await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));
+await ph.click('#cnav >> text=Market');await ph.click('tr.mk[data-i="12"]');await ph.click('button[data-act="amt"][data-a="10000"]');await ph.waitForTimeout(300);await ph.click('#tgo');await ph.waitForFunction(()=>C.priv.hold[12]>0);
+await host.waitForTimeout(25000);
+await host.locator('tr.lrow').first().scrollIntoViewIfNeeded();console.log('rows',await host.locator('tr.lrow').count());
+await host.click('tr.lrow:has-text("Human")');await host.waitForSelector('#hpm');await host.waitForTimeout(1500);console.log('modal open after refresh',await host.locator('#hpm').count()===1);console.log((await host.locator('#hpb').innerText()).replace(/\n+/g,' | ').slice(0,300));
+await host.screenshot({path:'v10_host.png'});await host.click('#hpx');console.log('closed',await host.locator('#hpm').count()===0);
+await host.click('tr.lrow:has-text("bot") >> nth=0');await host.waitForSelector('#hpm');console.log('bot modal ok');console.log('ERR',errs);await br.close();})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});

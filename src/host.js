@@ -1,5 +1,5 @@
 /* host console: authoritative market maker running in the facilitator's browser */
-const Host = { G: null, net: null, room: '', url: '', bi: 0, st: 'down', dirtyPub: true, dirtyTk: true, dirtyPriv: new Set(), tab: 'board', sel: 0, setup: null, pubBase: '', started: false, paused: false, remain: 0, sawAt: {}, wake: null, ns: 0, nsOff: 1000, tf: 'live', mod: null, openP: new Set(), dirtyHx: true, hxAt: 0, endShown: false };
+const Host = { G: null, net: null, room: '', url: '', bi: 0, st: 'down', dirtyPub: true, dirtyTk: true, dirtyPriv: new Set(), tab: 'board', sel: 0, setup: null, pubBase: '', started: false, paused: false, remain: 0, sawAt: {}, wake: null, ns: 0, nsOff: 1000, tf: 'live', mod: null, pmod: null, openP: new Set(), dirtyHx: true, hxAt: 0, endShown: false };
 
 function hostSave() { try { localStorage.setItem('dcap-host-' + Host.room, JSON.stringify({ G: Host.G, bi: Host.bi, bu: Host.bu, url: Host.url, pubBase: Host.pubBase, paused: Host.paused, remain: Host.remain, nsOff: Host.nsOff, brk: Host.brk })); localStorage.setItem('dcap-host-last', Host.room); } catch (e) { } }
 function hostLoad(room) { try { return JSON.parse(localStorage.getItem('dcap-host-' + room)); } catch (e) { return null; } }
@@ -177,6 +177,26 @@ function boardCards(pub, tk, G) {
   }
   return h;
 }
+function hostLeaders(G) {
+  const lb = DC.leaderboard(G), c0 = G.cfg.cash0;
+  return '<table class="tbl-sm lbt"><thead><tr><th>#</th><th style="text-align:left">Investor</th><th>Portfolio</th><th>Profit / loss</th><th class="hm">Positions</th></tr></thead><tbody>' + lb.map((x, k) => '<tr class="lrow" data-id="' + esc(x.id) + '"><td>' + (k + 1) + '</td><td style="text-align:left"><b class="lname">' + esc(x.n) + '</b>' + (x.bot ? ' <span class="chip">bot</span>' : '') + '</td><td>' + eurK(x.w) + '</td><td class="' + cls(x.w - c0) + '">' + pct(x.w / c0 - 1, 1) + '</td><td class="hm">' + G.pl[x.id].hold.filter(v => v > 0).length + '</td></tr>').join('') + '</tbody></table>';
+}
+function hostPortModal() {
+  const G = Host.G; let m = $('#hpm');
+  if (!Host.pmod || !G || !G.pl[Host.pmod] || G.ph === 'prep') { if (m) m.remove(); return; }
+  const pl = G.pl[Host.pmod], c0 = G.cfg.cash0, nw = DC.netWorth(G, pl), rank = DC.leaderboard(G).findIndex(x => x.id === pl.id) + 1;
+  let rows = '', inv = 0;
+  for (let i = 0; i < DC.NA; i++) {
+    const s = pl.hold[i]; if (!s) continue; const P = i < DC.NP ? G.pr[i].P : G.fi[i - DC.NP].P, v = s * P, pn = v - pl.cost[i]; inv += v;
+    rows += '<tr><td style="text-align:left"><b>' + DC.ALL[i].code + '</b> <span class="faint small">' + esc(DC.ALL[i].name) + '</span></td><td>' + s + '</td><td>' + px(P) + '</td><td>' + eurK(v) + '</td><td class="' + cls(pn) + '">' + eurS(pn) + '</td></tr>';
+  }
+  const html = '<div class="row" style="align-items:baseline;gap:10px"><h3 style="margin:0">' + esc(pl.name) + (pl.bot ? ' <span class="chip">bot</span>' : '') + '</h3><span class="small muted">rank ' + rank + ' of ' + G.ord.length + '</span></div>' +
+    '<div class="row" style="align-items:baseline;gap:12px;margin:6px 0"><b class="mono bigpx">' + eur(nw) + '</b><span class="mono ' + cls(nw - c0) + '">' + eurS(nw - c0) + ' (' + pct(nw / c0 - 1, 1) + ')</span></div>' +
+    '<div class="facts"><div class="fact"><span>Cash</span><b>' + eur(pl.cash) + '</b></div><div class="fact"><span>Invested</span><b>' + eur(inv) + '</b></div><div class="fact"><span>Trades</span><b>' + pl.tr + '</b></div><div class="fact"><span>Analyst reports</span><b>' + pl.ddn + '</b></div>' + (pl.cp ? '<div class="fact"><span>Bond coupons</span><b>' + eur(pl.cp) + '</b></div>' : '') + '</div>' +
+    (rows ? '<table class="tbl-sm" style="margin-top:10px"><thead><tr><th style="text-align:left">Holding</th><th>Units</th><th>Price</th><th>Value</th><th>Profit / loss</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="muted" style="margin-top:10px">No positions: everything is in cash.</p>');
+  if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = 'hpm'; m.innerHTML = '<div class="mbox wide legend" role="dialog"><button class="mx" id="hpx" aria-label="Close">✕</button><div id="hpb" style="text-align:left"></div></div>'; m.onclick = e => { if (e.target === m || e.target.id === 'hpx') { Host.pmod = null; m.remove(); } }; document.body.appendChild(m); }
+  const bx = $('#hpb'), st = bx.parentNode.scrollTop; bx.innerHTML = html; bx.parentNode.scrollTop = st;
+}
 function hostModal() {
   const G = Host.G; let m = $('#hmod');
   if (Host.mod == null || !G || G.ph === 'prep') { if (m) m.remove(); return; }
@@ -194,10 +214,11 @@ function renderHostLive(force) {
   $('#hon').textContent = G.ord.filter(id => !G.pl[id].bot && humanOnline(id)).length + '/' + G.ord.filter(id => !G.pl[id].bot).length;
   let inv = 0; for (const id of G.ord) { const pl = G.pl[id]; for (let i = 0; i < DC.NA; i++) inv += pl.hold[i] * (i < DC.NP ? G.pr[i].P : G.fi[i - DC.NP].P); } $('#hvol').textContent = eurK(inv);
   const ha = $('#hann'); if (ha) { const hh = G.ph === 'pause' && Host.brk ? annHTML({ t: G.t, bk: Host.brk.until, mj: Host.brk.ev ? G.maj : [] }, Host.annOpen !== false, Date.now()) : ''; if (ha.dataset.k !== hh) { ha.innerHTML = hh; ha.dataset.k = hh; } }
-  const tab = Host.tab; hostModal();
+  const tab = Host.tab; hostModal(); hostPortModal();
   if (tab === 'board') {
-    const lb = pub.top; body.innerHTML = '<div class="brow"><div class="panel"><h2>Headlines ' + NLEG_BTN + '</h2><div class="pb">' + newsFeed(G.news, 8) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div><div class="panel" style="margin-top:14px"><h2>Market <span class="small faint">every price at a glance · click any chart to enlarge</span></h2><div class="pb"><div class="mgrid">' + boardCards(pub, tk, G) + '</div></div></div><div class="panel" style="margin-top:14px"><h2>Leaderboard</h2><div class="pb">' + leaderTable(lb, null) + '</div></div>';
+    const lb = pub.top; body.innerHTML = '<div class="brow"><div class="panel"><h2>Headlines ' + NLEG_BTN + '</h2><div class="pb">' + newsFeed(G.news, 8) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div><div class="panel" style="margin-top:14px"><h2>Market <span class="small faint">every price at a glance · click any chart to enlarge</span></h2><div class="pb"><div class="mgrid">' + boardCards(pub, tk, G) + '</div></div></div><div class="panel" style="margin-top:14px"><h2>Leaderboard <span class="small faint">click a name to see the portfolio</span></h2><div class="pb">' + hostLeaders(G) + '</div></div>';
     $$('#hbody .mcard').forEach(r => r.onclick = () => { Host.mod = +r.dataset.i; renderHostLive(true); });
+    $$('#hbody tr.lrow').forEach(r => r.onclick = () => { Host.pmod = r.dataset.id; renderHostLive(true); });
   } else if (tab === 'class') {
     if (!force && body.dataset.tab === 'class' && G.ph === 'run' && Date.now() % 3000 > 1000) return;
     renderClassTab(body, G, pub, tk);
