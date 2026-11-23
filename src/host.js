@@ -160,7 +160,7 @@ function renderHost(full) {
       '<div class="row" id="hctl"></div></div><div class="wrap"><div class="tabs" id="htabs"></div></div></header><div id="hann"></div><main class="wrap main"><div id="hbody"></div></main>';
     renderHostChrome();
   }
-  $('#htabs').innerHTML = [['board', 'Market board'], ['class', 'Class & participation'], ['proj', 'Company detail'], ['ctl', 'Controls'], ['res', 'Final results']].map(t => '<button class="tab' + (Host.tab === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('');
+  $('#htabs').innerHTML = [['board', 'Market board'], ['class', 'Class & participation'], ['proj', 'Company & fund detail'], ['ctl', 'Controls'], ['res', 'Final results']].map(t => '<button class="tab' + (Host.tab === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('');
   $$('#htabs .tab').forEach(b => b.onclick = () => { Host.tab = b.dataset.t; renderHost(); });
   $('#hctl').innerHTML = '<button class="btn sm" id="bQ">📱 Join QR</button>' + (G.ph === 'run' || G.ph === 'pause' ? '<button class="btn sm" id="bP">' + (G.ph === 'pause' ? 'Resume' : 'Pause') + '</button><button class="btn sm" id="bN">Next year</button>' : '') + (G.ph === 'end' ? '<span class="chip good">Game over</span>' : '');
   const bQ = $('#bQ'); if (bQ) bQ.onclick = showJoinQR; const bP = $('#bP'); if (bP) bP.onclick = hostPause; const bN = $('#bN'); if (bN) bN.onclick = hostTickNow;
@@ -178,12 +178,13 @@ function renderHostLive(force) {
   const ha = $('#hann'); if (ha) { const hh = G.ph === 'pause' && Host.brk ? annHTML({ t: G.t, bk: Host.brk.until, mj: Host.brk.ev ? G.maj : [] }, Host.annOpen !== false, Date.now()) : ''; if (ha.dataset.k !== hh) { ha.innerHTML = hh; ha.dataset.k = hh; } }
   const tab = Host.tab;
   if (tab === 'board') {
-    const lb = pub.top; body.innerHTML = '<div class="cols"><div class="panel big"><h2>Market</h2>' + marketTable(pub, tk, { sel: -1, key: 'h' }) + '</div><div style="display:grid;gap:14px"><div class="panel"><h2>Headlines</h2><div class="pb">' + newsFeed(G.news, 6) + '</div></div><div class="panel"><h2>Leaders</h2><div class="pb">' + leaderTable(lb, null) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div></div>';
+    const lb = pub.top; body.innerHTML = '<div class="cols"><div class="panel big"><h2>Market</h2>' + marketTable(pub, tk, { sel: -1, key: 'h', host: true }) + '</div><div style="display:grid;gap:14px"><div class="panel"><h2>Headlines</h2><div class="pb">' + newsFeed(G.news, 6) + '</div></div><div class="panel"><h2>Leaders</h2><div class="pb">' + leaderTable(lb, null) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div></div>';
+    $$('#hbody tr.mk').forEach(r => r.onclick = () => { Host.sel = +r.dataset.i; Host.tab = 'proj'; renderHost(); });
   } else if (tab === 'class') {
     if (!force && body.dataset.tab === 'class' && G.ph === 'run' && Date.now() % 3000 > 1000) return;
     renderClassTab(body, G, pub, tk);
   } else if (tab === 'proj') {
-    body.innerHTML = '<div class="cols"><div class="panel"><h2>Companies</h2><div id="hmt">' + marketTable(pub, tk, { sel: Host.sel, key: 'p' }) + '</div></div><div class="panel"><div id="hdt">' + detailTop(Host.sel, pub, tk, null, true, { tf: Host.tf, bars: G.pr.map(p => p.cd) }) + '</div></div></div>';
+    body.innerHTML = '<div class="cols"><div class="panel"><h2>Companies, bonds and index <span class="small faint">click a row</span></h2><div id="hmt">' + marketTable(pub, tk, { sel: Host.sel, key: 'p', host: true }) + '</div></div><div class="panel"><div id="hdt">' + (Host.sel >= DC.NP ? fiTop : detailTop)(Host.sel, pub, tk, null, true, { tf: Host.tf, bars: G.pr.concat(G.fi).map(p => p.cd) }) + '</div></div></div>';
     $$('#hmt tr.mk').forEach(r => r.onclick = () => { Host.sel = +r.dataset.i; renderHostLive(true); });
   } else if (tab === 'ctl') {
     if (body.dataset.tab === 'ctl' && !force) return; renderCtl(body, G);

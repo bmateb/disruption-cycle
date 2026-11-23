@@ -111,7 +111,7 @@ function marketTable(pub, tk, o) {
   h += '<div class="fihd">Bonds and index fund <span class="small faint">fair price, no price impact · bonds pay a yearly coupon</span></div><table class="mt fit"><tbody>';
   for (let i = DC.NP; i < DC.NA; i++) {
     const d = DC.ALL[i], f = tk.fi[i - DC.NP], P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, so = P / 100 - 1, mine = o.priv ? o.priv.hold[i] : 0, live = f.st === 'live';
-    h += '<tr class="' + (o.priv ? 'mk' : '') + (o.sel === i ? ' sel' : '') + '" data-i="' + i + '"><td><span class="pn">' + d.code + ' <span class="faint" style="font-weight:500">' + esc(d.name) + '</span></span><span class="ps"><span class="chip">' + (f.kind === 'bond' ? 'Pays ' + Math.round(f.cpn * 100) + '% a year' : 'All 12 companies') + '</span></span></td>' +
+    h += '<tr class="' + (o.priv || o.host ? 'mk' : '') + (o.sel === i ? ' sel' : '') + '" data-i="' + i + '"><td><span class="pn">' + d.code + ' <span class="faint" style="font-weight:500">' + esc(d.name) + '</span></span><span class="ps"><span class="chip">' + (f.kind === 'bond' ? 'Pays ' + Math.round(f.cpn * 100) + '% a year' : 'All 12 companies') + '</span></span></td>' +
       '<td class="pxc' + (live ? flashCls(key + i, P) : '') + '"><b>' + px(P) + '</b></td><td>' + (live ? chgHTML(P, pp) : '') + '</td><td class="hm ' + cls(so) + '">' + pct(so, 1) + '</td><td class="hm"></td>' +
       (o.priv ? '<td>' + (mine ? '<b>' + mine + '</b><span class="ps">' + eurK(mine * P) + '</span>' : '<span class="faint">—</span>') + '</td>' : '') + '</tr>';
   }
