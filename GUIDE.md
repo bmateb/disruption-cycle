@@ -85,3 +85,10 @@ Live market game for the "Financing of innovation" session. Every student invest
 ## Version 5 changes
 
 - **Major-news pause:** when a year ends with major news (a funding round or IPO passing or failing, a takeover, a market-wide event) the market freezes for 15 seconds (configurable, setup screen or Controls) and a dropdown announces the news on every screen, including yours. Green ✓ = passed, red ✗ = failed, ⚡ = market-wide. Tap a headline to open the company; tap the bar to collapse the dropdown. Trading is closed during the pause. If a planning break is also on, one pause runs for the longer of the two times.
+
+## Version 6: reconnecting and the join QR
+
+- **Students:** if the phone sleeps, the network changes or the page is reloaded, the game reconnects by itself when the tab becomes visible again. If the link is lost, a banner appears with a **Reconnect** button. The status dot at the top and the "Connecting…" screen are also tappable. Reloading restores the same player and portfolio.
+- **Landing page:** a student who opens the bare site address sees a **Rejoin your game** card for the last room.
+- **Host:** a **📱 Join QR** button in the header (and in the Controls tab) opens a large QR code, join code and link that you can show on the projector at any time.
+- The host sends a small heartbeat every 5 seconds, so phones can tell an idle pause from a dead connection.

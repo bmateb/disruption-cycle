@@ -236,3 +236,10 @@ td.pxc.fu,.bigpx.fu{animation:flu 1s ease-out} td.pxc.fd,.bigpx.fd{animation:fld
 .ai[data-act]{cursor:pointer} .ai i{font-style:normal;font-weight:800;width:18px;text-align:center}
 .ai.ok i{color:var(--good)} .ai.bad i{color:var(--bad)} .ai.mkt i{color:var(--warn)}
 .ai.ok{background:linear-gradient(90deg,var(--good-bg),transparent 60%)} .ai.bad{background:linear-gradient(90deg,var(--bad-bg),transparent 60%)} .ai.mkt{background:linear-gradient(90deg,var(--warn-bg),transparent 60%)}
+
+/* v6: reconnect + join QR modal */
+.conn-warn{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:8px;font-weight:600}
+.conn[title="Tap to reconnect"]{width:14px;height:14px;box-shadow:0 0 0 4px var(--sunk)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:grid;place-items:center;padding:16px}
+.mbox{background:var(--surface);border-radius:16px;padding:22px 26px;text-align:center;max-width:520px;width:100%;display:grid;gap:8px;justify-items:center}
+.qr.big svg{width:min(70vw,360px);height:auto}

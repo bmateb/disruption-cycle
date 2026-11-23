@@ -153,9 +153,13 @@ function handleAck(a) {
 /* ---------- landing, name, boot ---------- */
 function clientLanding(P) {
   const app = $('#app');
-  app.innerHTML = '<div class="landing"><div class="hero"><div class="eyebrow">MSc Innovation Management</div><h1>Disruption Cycle: Capital Markets</h1><p class="muted">A live stock market for innovation companies. Prices update every second, and every trade you make moves the price for everybody.</p><div class="cardrow"><div class="card"><h3>I am a student</h3><div class="field"><label>Join code</label><input id="jc" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. K7M2Q0"></div><button class="btn pri" id="jb">Join</button><div id="je" class="err"></div></div><div class="card"><h3>I am the facilitator</h3><p class="small muted">Run the market from your browser. No server needed.</p><button class="btn" id="hb">Set up the market</button></div></div></div></div>';
+  app.innerHTML = '<div class="landing"><div class="hero"><div class="eyebrow">MSc Innovation Management</div><h1>Disruption Cycle: Capital Markets</h1><p class="muted">A live stock market for innovation companies. Prices update every second, and every trade you make moves the price for everybody.</p><div class="cardrow"><div class="card"><h3>I am a student</h3><div class="field"><label>Join code</label><input id="jc" maxlength="8" autocapitalize="characters" autocomplete="off" placeholder="e.g. K7M2Q0"></div><button class="btn pri" id="jb">Join</button><div id="je" class="err"></div></div><div class="card"><h3>I am the facilitator</h3><p class="small muted">Run the market from your browser. No server needed.</p><button class="btn" id="hb">Set up the market</button></div></div>' + rejoinHTML() + '</div></div>';
+  const rj = $('#rj'); if (rj) rj.onclick = () => { location.hash = rj.dataset.h; location.reload(); };
   $('#jb').onclick = () => { const c = $('#jc').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); if (c.length < 5) { $('#je').textContent = 'Enter the code shown on the screen.'; return; } const r = c.slice(0, 5), b = c.slice(5) || '0'; location.hash = 'r=' + r + '&b=' + b; location.reload(); };
   $('#hb').onclick = () => { location.hash = 'host=1'; location.reload(); };
+}
+function rejoinHTML() {
+  try { const h = localStorage.getItem('dcap-last'); if (!h) return ''; const P = new URLSearchParams(h.slice(1)), r = (P.get('r') || '').toUpperCase(); if (!r || !localStorage.getItem('dcap-me-' + r)) return ''; return '<div class="card" style="margin-top:12px"><h3>Rejoin your game</h3><p class="small muted">You were playing in room ' + esc(r) + '. Your portfolio is saved on the host.</p><button class="btn pri" id="rj" data-h="' + esc(h) + '">Rejoin room ' + esc(r) + '</button></div>'; } catch (e) { return ''; }
 }
 function clientStart(P) {
   C.room = P.get('r').toUpperCase(); C.url = brokerUrl(P);
@@ -171,6 +175,21 @@ function clientBoot(me) {
   C.me = me; C.tab = 'guide';
   $('#app').innerHTML = '<header class="top"><div class="wrap"><div class="brand">Disruption Cycle<small>Capital Markets</small></div><div class="clock"><div class="small mono" id="ck"></div><div class="bar"><i id="cb" style="width:0%"></i></div></div><div class="kpi"><b id="kNW">—</b><span id="kNWc" class="kc">Portfolio</span></div><div class="kpi hm"><b id="kCash">—</b><span>Cash</span></div><div class="kpi"><b id="kRank">—</b><span>Rank</span></div><span class="spacer"></span><span class="small muted hm" id="kName"></span><span id="cconn" class="conn" title="connection"></span></div><div class="wrap"><div class="tabs deskonly" id="ctabs"></div></div></header><div id="banner"></div><div id="ticker"></div><main class="wrap main"><div id="cbody"></div></main><nav class="bottom" id="cnav"></nav>';
   $('#kName').textContent = me.name;
+  clientNet();
+  setInterval(() => { if (C.st === 'up') { if (!C.privNet) sendHi(); else C.net.send('a', { k: 'hb', id: C.me.id, tok: C.me.tok }); } }, 9000);
+  setInterval(() => { pendingWatch(); renderClient(); }, 500);
+  document.addEventListener('click', clientClick); document.addEventListener('input', clientInput);
+  window.addEventListener('resize', () => { C.dirty = true; });
+  try { localStorage.setItem('dcap-last', location.hash); } catch (e) { }
+  const wake = () => { if (document.visibilityState === 'hidden') return; const age = Date.now() - Math.max(C.lastPubAt, C.lastConnAt); if (C.st !== 'up' || age > 4000) clientReconnect(false); };
+  document.addEventListener('visibilitychange', wake); window.addEventListener('online', wake); window.addEventListener('pageshow', wake);
+  setInterval(() => { if (!C.net || C.denied || (C.pub && C.pub.ph === 'end')) return; const age = Date.now() - Math.max(C.lastPubAt, C.lastConnAt); if ((C.st !== 'up' && Date.now() - C.lastConnAt > 10000) || age > 14000) clientReconnect(false); }, 3000);
+  const dot = $('#cconn'); if (dot) { dot.style.cursor = 'pointer'; dot.title = 'Tap to reconnect'; dot.onclick = () => clientReconnect(true); }
+  renderClient(true);
+}
+function clientNet() {
+  const me = C.me;
+  C.lastConnAt = Date.now(); if (C.net) { try { C.net.close(); } catch (e) { } }
   C.net = netOpen({
     url: C.url, room: C.room, subs: ['pub', 'tk', 'hx', 'u/' + me.id],
     onState: (s, d) => { C.st = s; $('#cconn') && ($('#cconn').className = 'conn ' + (s === 'up' ? 'ok' : s === 'err' ? 'bad' : '')); if (s === 'up') sendHi(); },
@@ -189,11 +208,9 @@ function clientBoot(me) {
       refreshView(); C.dirty = true;
     },
   });
-  setInterval(() => { if (C.st === 'up') { if (!C.privNet) sendHi(); else C.net.send('a', { k: 'hb', id: C.me.id, tok: C.me.tok }); } }, 9000);
-  setInterval(() => { pendingWatch(); renderClient(); }, 500);
-  document.addEventListener('click', clientClick); document.addEventListener('input', clientInput);
-  window.addEventListener('resize', () => { C.dirty = true; });
-  renderClient(true);
+}
+function clientReconnect(manual) {
+  C.st = 'down'; const d = $('#cconn'); if (d) d.className = 'conn'; C.pending = null; clientNet(); if (manual) toast('Reconnecting…'); C.dirty = true;
 }
 function sendHi() { if (C.net) C.net.send('a', { k: 'hi', id: C.me.id, tok: C.me.tok, name: C.me.name }, 1); }
 function tabsFor(ph) {
@@ -221,8 +238,8 @@ function renderClient(force) {
   const pub = C.pub, tk = C.tk, body = $('#cbody'); if (!body) return;
   refreshView();
   if (C.denied) { body.innerHTML = '<div class="panel"><div class="pb"><h2>This name is already in use in this room</h2><p>Open the join link again and pick a different name, or clear this site’s data.</p></div></div>'; return; }
-  const stale = pub && Date.now() - C.lastPubAt > 9000;
-  if (!pub || !tk || !C.priv) { $('#banner').innerHTML = ''; body.innerHTML = '<div class="panel"><div class="pb"><h2>Connecting…</h2><p class="muted">' + (C.st === 'up' ? 'Connected to the relay. Waiting for the host to answer.' : C.st === 'err' ? 'The relay is not reachable from this network. Try another network, such as mobile data.' : 'Reaching the relay.') + '</p></div></div>'; body.dataset.k = ''; return; }
+  const stale = pub && pub.ph !== 'end' && Date.now() - C.lastPubAt > 9000;
+  if (!pub || !tk || !C.priv) { $('#banner').innerHTML = ''; body.innerHTML = '<div class="panel"><div class="pb"><h2>Connecting…</h2><p class="muted">' + (C.st === 'up' ? 'Connected to the relay. Waiting for the host to answer.' : C.st === 'err' ? 'The relay is not reachable from this network. Try another network, such as mobile data.' : 'Reaching the relay.') + '</p><button class="btn pri" data-act="reconnect">Reconnect now</button></div></div>'; body.dataset.k = ''; return; }
   const ph = pub.ph;
   if (C.phSeen !== ph) {
     if (C.phSeen === 'prep' && ph === 'run') { toast('The market is open. Good luck!'); if (C.tab === 'guide') C.tab = 'market'; C.sel = C.sel; }
@@ -233,10 +250,9 @@ function renderClient(force) {
   const tsig = C.tab + '|' + ph;
   if ($('#ctabs').dataset.k !== tsig) { $('#ctabs').innerHTML = TB.map(t => '<button class="tab' + (C.tab === t[0] ? ' on' : '') + '" data-act="tab" data-t="' + t[0] + '">' + t[1] + '</button>').join(''); $('#ctabs').dataset.k = tsig; $('#cnav').innerHTML = TB.map(t => '<button class="' + (C.tab === t[0] ? 'on' : '') + '" data-act="tab" data-t="' + t[0] + '"><i>' + t[2] + '</i>' + t[1] + '</button>').join(''); }
   // banner: practice mode or connection warning
-  let bn = '';
-  if (ph === 'prep') bn = '<div class="wrap"><div class="prac"><div><b>PRACTICE MODE</b> · prices are frozen and nothing you do counts. Try buying and selling, open a company, read the guide. <span class="faint">' + pub.rc + ' of ' + pub.hc + ' ready</span></div><div class="row"><button class="btn sm" data-act="prreset">Reset practice</button><button class="btn pri sm" data-act="rdy">' + (C.rdy ? '✓ Ready (tap to undo)' : 'I’m ready') + '</button></div></div></div>';
-  else if (ph === 'pause' && pub.bk) { if (C.annT !== pub.t) { C.annT = pub.t; C.annOpen = true; } bn = annHTML(pub, C.annOpen, nowHost()); }
-  else if (stale) bn = '<div class="wrap"><div class="note warn" style="margin-top:8px">Waiting for the host… your last data is shown.</div></div>';
+  let bn = (stale || (C.st !== 'up' && pub.ph !== 'end')) ? '<div class="wrap"><div class="note warn conn-warn"><span>Connection lost. Your data may be out of date.</span><button class="btn pri sm" data-act="reconnect">Reconnect</button></div></div>' : '';
+  if (ph === 'prep') bn += '<div class="wrap"><div class="prac"><div><b>PRACTICE MODE</b> · prices are frozen and nothing you do counts. Try buying and selling, open a company, read the guide. <span class="faint">' + pub.rc + ' of ' + pub.hc + ' ready</span></div><div class="row"><button class="btn sm" data-act="prreset">Reset practice</button><button class="btn pri sm" data-act="rdy">' + (C.rdy ? '✓ Ready (tap to undo)' : 'I’m ready') + '</button></div></div></div>';
+  else if (ph === 'pause' && pub.bk) { if (C.annT !== pub.t) { C.annT = pub.t; C.annOpen = true; } bn += annHTML(pub, C.annOpen, nowHost()); }
   if ($('#banner').dataset.k !== bn) { $('#banner').innerHTML = bn; $('#banner').dataset.k = bn; }
   renderTicker();
   // header
@@ -291,6 +307,7 @@ function clientClick(e) {
   if (a === 'goto') { C.sel = +t.dataset.i; C.tab = 'market'; C.rebuiltDt = true; C.dirty = true; $('#cbody').dataset.k = ''; $('#ctabs').dataset.k = ''; renderClient(true); window.scrollTo(0, 0); return; }
   if (a === 'tab') { C.tab = t.dataset.t; $('#ctabs').dataset.k = ''; $('#cbody').dataset.k = ''; C.dirty = true; renderClient(true); return; }
   if (a === 'back') { C.sel = null; $('#cbody').dataset.k = ''; C.dirty = true; renderClient(true); return; }
+  if (a === 'reconnect') { clientReconnect(true); return; }
   if (a === 'ann') { C.annOpen = !C.annOpen; $('#banner').dataset.k = ''; renderClient(true); return; }
   if (a === 'tf') { C.tf = t.dataset.m; C.dirty = true; renderClient(true); return; }
   if (a === 'px') { const k = +t.dataset.k; if (C.openP.has(k)) C.openP.delete(k); else C.openP.add(k); C.dirty = true; renderClient(true); return; }

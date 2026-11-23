@@ -80,6 +80,7 @@ function hostFire(k) { const G = Host.G; const news = []; DC.fire(G, k, news); D
 function hostLoop() {
   const G = Host.G; if (!G) return;
   const now = Date.now();
+  if (now - (Host.beat || 0) > 5000) { Host.beat = now; Host.dirtyPub = true; if (G.ph !== 'run') Host.dirtyTk = true; } // heartbeat so phones can tell the link is alive
   if (G.ph === 'run') {
     let guard = 0;
     while (now >= Host.ns && G.ph === 'run' && guard++ < 90) {
@@ -161,8 +162,8 @@ function renderHost(full) {
   }
   $('#htabs').innerHTML = [['board', 'Market board'], ['class', 'Class & participation'], ['proj', 'Company detail'], ['ctl', 'Controls'], ['res', 'Final results']].map(t => '<button class="tab' + (Host.tab === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('');
   $$('#htabs .tab').forEach(b => b.onclick = () => { Host.tab = b.dataset.t; renderHost(); });
-  $('#hctl').innerHTML = (G.ph === 'run' || G.ph === 'pause' ? '<button class="btn sm" id="bP">' + (G.ph === 'pause' ? 'Resume' : 'Pause') + '</button><button class="btn sm" id="bN">Next year</button>' : '') + (G.ph === 'end' ? '<span class="chip good">Game over</span>' : '');
-  const bP = $('#bP'); if (bP) bP.onclick = hostPause; const bN = $('#bN'); if (bN) bN.onclick = hostTickNow;
+  $('#hctl').innerHTML = '<button class="btn sm" id="bQ">📱 Join QR</button>' + (G.ph === 'run' || G.ph === 'pause' ? '<button class="btn sm" id="bP">' + (G.ph === 'pause' ? 'Resume' : 'Pause') + '</button><button class="btn sm" id="bN">Next year</button>' : '') + (G.ph === 'end' ? '<span class="chip good">Game over</span>' : '');
+  const bQ = $('#bQ'); if (bQ) bQ.onclick = showJoinQR; const bP = $('#bP'); if (bP) bP.onclick = hostPause; const bN = $('#bN'); if (bN) bN.onclick = hostTickNow;
   renderHostLive(true);
 }
 function pubOf() { return DC.pub(Host.G); }
@@ -204,8 +205,8 @@ function topShare(G) { const byP = G.pr.map((p, i) => { let s = 0; for (const id
 function renderCtl(body, G) {
   body.innerHTML = '<div class="cols"><div class="panel"><h2>Market controls</h2><div class="pb"><div class="row" style="margin-bottom:10px"><button class="btn" id="cP">' + (G.ph === 'pause' ? (Host.brk ? 'Start next year now' : 'Resume') : 'Pause market') + '</button><button class="btn" id="cN">Jump to year end now</button><button class="btn" id="cX15">+15 s this year</button><button class="btn sell" id="cE">End game now</button></div>' +
     '<h3 style="margin:14px 0 6px">Pauses</h3><div class="row"><label class="small"><input type="checkbox" id="cEv" ' + (G.cfg.evp ? 'checked' : '') + '> Pause on major news for</label><label class="small"><input id="cEs" type="number" min="5" max="120" value="' + (G.cfg.evSec || 15) + '" style="width:60px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"> seconds</label></div><h3 style="margin:10px 0 6px">Planning break between years</h3><div class="row"><label class="small"><input type="checkbox" id="cBk" ' + (G.cfg.brk ? 'checked' : '') + '> Pause at the end of every year</label><label class="small">for <input id="cBs" type="number" min="5" max="300" value="' + (G.cfg.brkSec || 30) + '" style="width:70px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"> seconds</label></div><p class="small muted">During a break prices are frozen and trading is closed. Students can read the news, the charts and their portfolio. Applies from the next year end.</p><h3 style="margin:14px 0 6px">Attention check</h3><div class="row"><button class="btn sm" data-tip="up">Fake “buy now” tip</button><button class="btn sm" data-tip="down">Fake “sell now” tip</button></div><p class="small muted">Publishes a dubious tip. The price spikes briefly and drifts back; the final results list who followed it.</p><h3 style="margin:14px 0 6px">Trigger a market event now</h3><p class="small muted">Use it as a teaching moment. Scheduled events already fire on their own (with a short warning headline first) if switched on.</p><div class="row"><button class="btn sm" data-e="hype">Deep-tech frenzy</button><button class="btn sm" data-e="winter">Funding winter</button><button class="btn sm" data-e="disrupt">Disruptor hits the core</button><button class="btn sm" data-e="rumour">Takeover rumour</button></div></div></div>' +
-    '<div class="panel"><h2>Session</h2><div class="pb"><p class="small">Join code <b class="mono">' + esc(joinCode()) + '</b> · relay <span class="mono small">' + esc(Host.url) + '</span></p><p class="small muted">Relay status: ' + Host.st + (Host.stDetail ? ' (' + esc(Host.stDetail) + ')' : '') + '. If the relay drops, students reconnect on their own and everything resumes.</p><label class="small"><input type="checkbox" id="cA" ' + (G.cfg.anon ? 'checked' : '') + '> Hide names on the trade feed</label></div></div></div>';
-  $('#cP').onclick = hostPause; $('#cN').onclick = hostTickNow; $('#cX15').onclick = () => { G.yl += 15; if (G.ph === 'pause') Host.remain += 15000; markAll(); toast('15 seconds added to this year'); }; $('#cE').onclick = () => { if (confirm('End the game now and pay out all companies?')) hostEndNow(); };
+    '<div class="panel"><h2>Session</h2><div class="pb"><p class="small">Join code <b class="mono">' + esc(joinCode()) + '</b> · relay <span class="mono small">' + esc(Host.url) + '</span></p><p class="small muted">Relay status: ' + Host.st + (Host.stDetail ? ' (' + esc(Host.stDetail) + ')' : '') + '. If the relay drops, students reconnect on their own and everything resumes.</p><div style="margin:8px 0"><button class="btn sm" id="cQ">📱 Show join QR code</button></div><label class="small"><input type="checkbox" id="cA" ' + (G.cfg.anon ? 'checked' : '') + '> Hide names on the trade feed</label></div></div></div>';
+  $('#cQ').onclick = showJoinQR; $('#cP').onclick = hostPause; $('#cN').onclick = hostTickNow; $('#cX15').onclick = () => { G.yl += 15; if (G.ph === 'pause') Host.remain += 15000; markAll(); toast('15 seconds added to this year'); }; $('#cE').onclick = () => { if (confirm('End the game now and pay out all companies?')) hostEndNow(); };
   $('#cEv').onchange = e => { G.cfg.evp = e.target.checked; }; $('#cEs').onchange = e => { G.cfg.evSec = Math.max(5, Math.min(120, +e.target.value || 15)); e.target.value = G.cfg.evSec; };
   $('#cBk').onchange = e => { G.cfg.brk = e.target.checked; }; $('#cBs').onchange = e => { G.cfg.brkSec = Math.max(5, Math.min(300, +e.target.value || 30)); e.target.value = G.cfg.brkSec; };
   $$('[data-tip]').forEach(b => b.onclick = () => { const i = DC.fakeTip(G, b.dataset.tip); Host.dirtyPub = Host.dirtyTk = true; toast(i == null ? 'No company left to tip' : 'Fake tip published'); });
@@ -225,6 +226,12 @@ function renderLobbyLive() {
   const all = hs.length > 0 && rd === hs.length; const b = $('#lstart'); b.textContent = all ? 'Everyone is ready: start the market' : 'Start the market (' + rd + ' of ' + hs.length + ' ready)';
   $('#lnote').textContent = hs.length === 0 ? 'Waiting for students to join.' : all ? '' : 'You can start before everyone is ready; the button asks you to confirm.';
   renderHostChrome();
+}
+function showJoinQR() {
+  const link = joinLink(); let qr = ''; try { const q = qrcode(0, 'M'); q.addData(link); q.make(); qr = q.createSvgTag({ cellSize: 9, margin: 0 }); } catch (e) { }
+  const m = document.createElement('div'); m.className = 'modal'; m.id = 'qrm';
+  m.innerHTML = '<div class="mbox"><div class="eyebrow">Join the game</div><div class="code">' + esc(joinCode()) + '</div><div class="qr big">' + qr + '</div><p class="mono small" style="word-break:break-all;user-select:all;margin-top:10px">' + esc(link) + '</p><p class="small muted">Students who lost connection can also tap “Reconnect” on their own screen.</p><button class="btn pri" id="qrx">Close</button></div>';
+  m.onclick = e => { if (e.target === m || e.target.id === 'qrx') m.remove(); }; document.body.appendChild(m);
 }
 function hostClick(e) {
   const t = e.target.closest('[data-act]'); if (!t || !Host.G) return; const a = t.dataset.act;
