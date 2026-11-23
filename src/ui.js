@@ -73,6 +73,19 @@ function buildCandles(bars, cur, curY, mode, gl, slotsMax) {
   }
   return { cs: cs, marks: marks, xl: xl };
 }
+/* stock-exchange style scrolling price announcer; built once, then only the numbers are updated so the scroll never restarts */
+function updateTape(el, pub, tk) {
+  if (!el || !pub || !pub.P || !pub.P.length || !tk) return;
+  if (!el.dataset.built) {
+    const one = DC.ALL.map((d, i) => '<span class="tp" data-p="' + i + '"><b>' + d.code + '</b> <span class="v"></span> <span class="c"></span></span>').join('');
+    el.innerHTML = '<div class="mqt">' + one + one + '</div>'; el.dataset.built = '1';
+  }
+  el.querySelectorAll('.tp').forEach(n => {
+    const i = +n.dataset.p, P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, base = i < DC.NP ? (tk.pr[i].ph[0] || P) : 100, ch = P / base - 1, dead = i < DC.NP && tk.pr[i].st === 'dead';
+    n.querySelector('.v').textContent = P.toFixed(2);
+    const c = n.querySelector('.c'); c.textContent = dead ? 'FAILED' : (ch >= 0 ? '▲ +' : '▼ ') + (ch * 100).toFixed(1) + '%'; c.className = 'c ' + (dead ? 'd' : ch > 0.0005 ? 'u' : ch < -0.0005 ? 'd' : '');
+  });
+}
 function sparkline(vals, w, h, col) {
   if (!vals || vals.length < 2) return '';
   w = w || 90; h = h || 26; const mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals), r = mx - mn || 1;

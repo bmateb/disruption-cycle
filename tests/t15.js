@@ -1,0 +1,17 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{const br=await chromium.launch();const errs=[];const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h},deviceScaleFactor:1});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));return p;};
+const host=await mk(1500,1000);await host.goto(BASE+'#host=1');await host.waitForSelector('#go');
+await host.selectOption('#sR','custom');await host.fill('#sU',BU);await host.fill('#sT','8');await host.fill('#sS','60');await host.fill('#sB','4');await host.fill('#sA',BASE);await host.uncheck('#sBk');
+await host.click('#go');await host.waitForSelector('#lstart');const link=await host.locator('.mono.small').first().innerText();
+const ph=await mk(390,844);await ph.goto(link);await ph.fill('#nm','P');await ph.click('#nb');await ph.waitForSelector('.prac');await ph.click('button[data-act="rdy"]');
+await host.click('#lstart');await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));await host.waitForTimeout(25000);
+console.log('cards',await host.locator('.mcard').count(),'tape items',await host.locator('#mq .tp').count());
+const t1=await host.evaluate(()=>document.querySelector('#mq .tp .v').textContent);await host.waitForTimeout(2200);const t2=await host.evaluate(()=>document.querySelector('#mq .tp .v').textContent);
+const tr=await host.evaluate(()=>getComputedStyle(document.querySelector('.mqt')).transform);console.log('first tape price',t1,'->',t2,'transform',tr);
+await host.screenshot({path:'v8_host.png'});
+await host.click('.mcard[data-i="14"]');await host.waitForSelector('#hmod');await host.waitForTimeout(1500);console.log('modal title:',await host.locator('#hmb h2').first().innerText());await host.screenshot({path:'v8_modal.png'});
+await host.click('#hmx');console.log('closed',await host.locator('#hmod').count()===0);
+await host.click('.mcard[data-i="3"]');await host.waitForSelector('#hmod');console.log('company modal:',await host.locator('#hmb h2').first().innerText());await host.keyboard.press('Escape');await host.click('#hmx');
+await ph.screenshot({path:'v8_phone.png'});
+console.log('ERR',errs);await br.close();})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});

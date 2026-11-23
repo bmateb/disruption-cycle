@@ -107,3 +107,8 @@ Three extra instruments sit under the company table on the Market tab. They trad
 - The three macro events move rates: the funding winter (rates jump, bonds fall, corporate bond most), the deep-tech frenzy (State Bond slips), the disruptor event (flight to quality, corporate bond weakens). A short news line announces each move.
 - No concentration limit applies to these, so a student can park money in them as a safe base. Teaching hook: compare class portfolios with the 70-20-10 rule and ask who used the bonds and index to diversify.
 - They appear in portfolios, the results screen, the CSV and the host's "where the class money sits" chart (grey "Bonds & index").
+
+## Version 8: market board and price announcer
+
+- **Host Market board:** a grid with one live candle chart per instrument (12 companies, 2 bonds, the index), each with price, change and since-open. Click any card to open an enlarged window with the full chart (live or by year) and details. Close it with the button or by clicking outside.
+- **Price announcer:** a stock-exchange style scrolling bar at the very top of the host and student screens shows every code, price and change since open. It pauses on hover and stops moving if the device asks for reduced motion.

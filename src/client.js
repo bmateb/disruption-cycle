@@ -185,7 +185,7 @@ function clientStart(P) {
 }
 function clientBoot(me) {
   C.me = me; C.tab = 'guide';
-  $('#app').innerHTML = '<header class="top"><div class="wrap"><div class="brand">Disruption Cycle<small>Capital Markets</small></div><div class="clock"><div class="small mono" id="ck"></div><div class="bar"><i id="cb" style="width:0%"></i></div></div><div class="kpi"><b id="kNW">—</b><span id="kNWc" class="kc">Portfolio</span></div><div class="kpi hm"><b id="kCash">—</b><span>Cash</span></div><div class="kpi"><b id="kRank">—</b><span>Rank</span></div><span class="spacer"></span><span class="small muted hm" id="kName"></span><span id="cconn" class="conn" title="connection"></span></div><div class="wrap"><div class="tabs deskonly" id="ctabs"></div></div></header><div id="banner"></div><div id="ticker"></div><main class="wrap main"><div id="cbody"></div></main><nav class="bottom" id="cnav"></nav>';
+  $('#app').innerHTML = '<header class="top"><div class="mq" id="mq" aria-label="Live prices"></div><div class="wrap"><div class="brand">Disruption Cycle<small>Capital Markets</small></div><div class="clock"><div class="small mono" id="ck"></div><div class="bar"><i id="cb" style="width:0%"></i></div></div><div class="kpi"><b id="kNW">—</b><span id="kNWc" class="kc">Portfolio</span></div><div class="kpi hm"><b id="kCash">—</b><span>Cash</span></div><div class="kpi"><b id="kRank">—</b><span>Rank</span></div><span class="spacer"></span><span class="small muted hm" id="kName"></span><span id="cconn" class="conn" title="connection"></span></div><div class="wrap"><div class="tabs deskonly" id="ctabs"></div></div></header><div id="banner"></div><div id="ticker"></div><main class="wrap main"><div id="cbody"></div></main><nav class="bottom" id="cnav"></nav>';
   $('#kName').textContent = me.name;
   clientNet();
   setInterval(() => { if (C.st === 'up') { if (!C.privNet) sendHi(); else C.net.send('a', { k: 'hb', id: C.me.id, tok: C.me.tok }); } }, 9000);
@@ -258,7 +258,7 @@ function renderTicker() {
 }
 function renderClient(force) {
   const pub = C.pub, tk = C.tk, body = $('#cbody'); if (!body) return;
-  refreshView();
+  refreshView(); updateTape($('#mq'), C.pub, C.tk);
   if (C.denied) { body.innerHTML = '<div class="panel"><div class="pb"><h2>This name is already in use in this room</h2><p>Open the join link again and pick a different name, or clear this site’s data.</p></div></div>'; return; }
   const stale = pub && pub.ph !== 'end' && Date.now() - C.lastPubAt > 9000;
   if (!pub || !tk || !C.priv) { $('#banner').innerHTML = ''; body.innerHTML = '<div class="panel"><div class="pb"><h2>Connecting…</h2><p class="muted">' + (C.st === 'up' ? 'Connected to the relay. Waiting for the host to answer.' : C.st === 'err' ? 'The relay is not reachable from this network. Try another network, such as mobile data.' : 'Reaching the relay.') + '</p><button class="btn pri" data-act="reconnect">Reconnect now</button></div></div>'; body.dataset.k = ''; return; }

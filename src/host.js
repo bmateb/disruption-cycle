@@ -1,5 +1,5 @@
 /* host console: authoritative market maker running in the facilitator's browser */
-const Host = { G: null, net: null, room: '', url: '', bi: 0, st: 'down', dirtyPub: true, dirtyTk: true, dirtyPriv: new Set(), tab: 'board', sel: 0, setup: null, pubBase: '', started: false, paused: false, remain: 0, sawAt: {}, wake: null, ns: 0, nsOff: 1000, tf: 'live', openP: new Set(), dirtyHx: true, hxAt: 0, endShown: false };
+const Host = { G: null, net: null, room: '', url: '', bi: 0, st: 'down', dirtyPub: true, dirtyTk: true, dirtyPriv: new Set(), tab: 'board', sel: 0, setup: null, pubBase: '', started: false, paused: false, remain: 0, sawAt: {}, wake: null, ns: 0, nsOff: 1000, tf: 'live', mod: null, openP: new Set(), dirtyHx: true, hxAt: 0, endShown: false };
 
 function hostSave() { try { localStorage.setItem('dcap-host-' + Host.room, JSON.stringify({ G: Host.G, bi: Host.bi, bu: Host.bu, url: Host.url, pubBase: Host.pubBase, paused: Host.paused, remain: Host.remain, nsOff: Host.nsOff, brk: Host.brk })); localStorage.setItem('dcap-host-last', Host.room); } catch (e) { } }
 function hostLoad(room) { try { return JSON.parse(localStorage.getItem('dcap-host-' + room)); } catch (e) { return null; } }
@@ -154,7 +154,7 @@ function renderHost(full) {
   if (G.ph === 'prep') { renderLobby(); return; }
   if (G.ph === 'end' && !Host.endShown) { Host.endShown = true; Host.tab = 'res'; full = true; }
   if (full || !$('#hbody')) {
-    app.innerHTML = '<header class="top"><div class="wrap"><div class="brand">Disruption Cycle<small>Capital Markets · host</small></div>' +
+    app.innerHTML = '<header class="top"><div class="mq" id="mq" aria-label="Live prices"></div><div class="wrap"><div class="brand">Disruption Cycle<small>Capital Markets · host</small></div>' +
       '<div class="clock"><div class="small mono" id="hclk"></div><div class="bar"><i id="hbar" style="width:0%"></i></div></div>' +
       '<div class="kpi"><b id="hon">0</b><span>online</span></div><div class="kpi"><b id="hvol">€0</b><span>invested</span></div><span class="spacer"></span><span id="hconn" class="conn" title=""></span>' +
       '<div class="row" id="hctl"></div></div><div class="wrap"><div class="tabs" id="htabs"></div></div></header><div id="hann"></div><main class="wrap main"><div id="hbody"></div></main>';
@@ -166,20 +166,38 @@ function renderHost(full) {
   const bQ = $('#bQ'); if (bQ) bQ.onclick = showJoinQR; const bP = $('#bP'); if (bP) bP.onclick = hostPause; const bN = $('#bN'); if (bN) bN.onclick = hostTickNow;
   renderHostLive(true);
 }
+function boardCards(pub, tk, G) {
+  const all = G.pr.concat(G.fi); let h = '';
+  for (let i = 0; i < DC.NA; i++) {
+    const d = DC.ALL[i], P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, base = i < DC.NP ? (tk.pr[i].ph[0] || P) : 100, so = P / base - 1, lab = projLabel(i, tk), live = i >= DC.NP || tk.pr[i].st === 'live';
+    const b = buildCandles(all[i].cd, live && pub.cb && pub.ph !== 'prep' ? pub.cb[i] : null, Math.min(pub.t + 1, pub.T), 'live', [], 30);
+    h += '<div class="mcard" data-i="' + i + '"><div class="row"><b>' + d.code + '</b><span class="small muted">' + esc(d.name) + '</span><span class="spacer"></span><span class="chip ' + lab.c + '">' + lab.t + '</span></div>' +
+      '<div class="row" style="align-items:baseline;gap:10px"><b class="mono" style="font-size:20px">€' + px(P) + '</b>' + (live ? chgHTML(P, pp) : '') + '<span class="spacer"></span><span class="small mono ' + cls(so) + '">' + pct(so, 1) + '</span></div>' +
+      candleChart({ cs: b.cs, marks: [], xl: [], slots: 30, w: 300, h: 120, floor0: true, minRange: P * 0.015, last: P, label: d.name + ' price candles' }) + '</div>';
+  }
+  return h;
+}
+function hostModal() {
+  const G = Host.G; let m = $('#hmod');
+  if (Host.mod == null || !G || G.ph === 'prep') { if (m) m.remove(); return; }
+  const pub = pubOf(), tk = DC.tk(G), i = Host.mod;
+  if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = 'hmod'; m.innerHTML = '<div class="mbox wide"><div class="row" style="justify-content:flex-end;width:100%"><button class="btn sm" id="hmx">Close ✕</button></div><div id="hmb" style="width:100%;text-align:left"></div></div>'; m.onclick = e => { if (e.target === m || e.target.id === 'hmx') { Host.mod = null; m.remove(); } }; document.body.appendChild(m); }
+  const bx = $('#hmb'), st = bx.parentNode.scrollTop; bx.innerHTML = (i >= DC.NP ? fiTop : detailTop)(i, pub, tk, null, true, { tf: Host.tf, bars: G.pr.concat(G.fi).map(p => p.cd) }); bx.parentNode.scrollTop = st;
+}
 function pubOf() { return DC.pub(Host.G); }
 function renderHostLive(force) {
   const G = Host.G, body = $('#hbody'); if (!G || !body || G.ph === 'prep') { if (G && G.ph === 'prep') renderLobbyLive(); return; }
-  const pub = pubOf(), tk = DC.tk(G);
+  const pub = pubOf(), tk = DC.tk(G); updateTape($('#mq'), pub, tk);
   const left = G.ph === 'run' ? Math.max(0, hostTE() - Date.now()) : Host.paused ? Host.remain : 0;
   $('#hclk').textContent = G.ph === 'end' ? 'Game over' : Host.brk && G.ph === 'pause' ? (Host.brk.ev ? 'MAJOR NEWS' : 'PLANNING BREAK') + ' · year ' + Math.min(G.t + 1, G.T) + ' starts in ' + mmss(Host.brk.until - Date.now()) : (G.ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(G.t + 1, G.T) + ' / ' + G.T + ' · ' + mmss(left);
   $('#hbar').style.width = (G.ph === 'end' ? 100 : 100 - left / ((G.yl || G.cfg.tickSec) * 1000) * 100) + '%';
   $('#hon').textContent = G.ord.filter(id => !G.pl[id].bot && humanOnline(id)).length + '/' + G.ord.filter(id => !G.pl[id].bot).length;
   let inv = 0; for (const id of G.ord) { const pl = G.pl[id]; for (let i = 0; i < DC.NA; i++) inv += pl.hold[i] * (i < DC.NP ? G.pr[i].P : G.fi[i - DC.NP].P); } $('#hvol').textContent = eurK(inv);
   const ha = $('#hann'); if (ha) { const hh = G.ph === 'pause' && Host.brk ? annHTML({ t: G.t, bk: Host.brk.until, mj: Host.brk.ev ? G.maj : [] }, Host.annOpen !== false, Date.now()) : ''; if (ha.dataset.k !== hh) { ha.innerHTML = hh; ha.dataset.k = hh; } }
-  const tab = Host.tab;
+  const tab = Host.tab; hostModal();
   if (tab === 'board') {
-    const lb = pub.top; body.innerHTML = '<div class="cols"><div class="panel big"><h2>Market</h2>' + marketTable(pub, tk, { sel: -1, key: 'h', host: true }) + '</div><div style="display:grid;gap:14px"><div class="panel"><h2>Headlines</h2><div class="pb">' + newsFeed(G.news, 6) + '</div></div><div class="panel"><h2>Leaders</h2><div class="pb">' + leaderTable(lb, null) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div></div>';
-    $$('#hbody tr.mk').forEach(r => r.onclick = () => { Host.sel = +r.dataset.i; Host.tab = 'proj'; renderHost(); });
+    const lb = pub.top; body.innerHTML = '<div class="panel"><h2>Market <span class="small faint">every price at a glance · click any chart to enlarge</span></h2><div class="pb"><div class="mgrid">' + boardCards(pub, tk, G) + '</div></div></div><div class="cols" style="margin-top:14px"><div style="display:grid;gap:14px"><div class="panel"><h2>Headlines</h2><div class="pb">' + newsFeed(G.news, 6) + '</div></div><div class="panel"><h2>Leaders</h2><div class="pb">' + leaderTable(lb, null) + '</div></div><div class="panel"><h2>Live trades</h2><div class="pb">' + tapeFeed(pub) + '</div></div></div></div>';
+    $$('#hbody .mcard').forEach(r => r.onclick = () => { Host.mod = +r.dataset.i; renderHostLive(true); });
   } else if (tab === 'class') {
     if (!force && body.dataset.tab === 'class' && G.ph === 'run' && Date.now() % 3000 > 1000) return;
     renderClassTab(body, G, pub, tk);
