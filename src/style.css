@@ -246,3 +246,5 @@ td.pxc.fu,.bigpx.fu{animation:flu 1s ease-out} td.pxc.fd,.bigpx.fd{animation:fld
 
 /* v6.1: no replaying animation on the per-second dropdown; keep content clear of the mobile nav */
 @media (max-width:900px){ main.wrap.main{padding-bottom:calc(110px + env(safe-area-inset-bottom))} }
+/* v6.2: breathing room between stacked tiles on mobile */
+@media (max-width:900px){ #cbody>*+*,#hbody>*+*{margin-top:12px} #ticker+main.wrap.main,#banner+#ticker+main.wrap.main{padding-top:12px} #cbody .panel+.panel,#cbody .card+.card{margin-top:12px} }
