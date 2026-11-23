@@ -31,7 +31,7 @@
   const DEF = {
     T: 14, tickSec: 75, cash0: 100000, fee: 0.005, ddCost: 1500, maxExp: 0.4,
     depthF: 2.0, lam: 0.3, phi: 0.08, sigTr: 0.18, sigDD: 0.10, sigSent: 0.02,
-    events: true, anon: false, news: true, bar: 5,
+    events: true, anon: false, news: true, tips: true, bar: 5,
   };
 
   // ------------------------------------------------------------------ utils
@@ -89,7 +89,7 @@
   // ------------------------------------------------------------------ setup
   function newGame(cfg, seed) {
     const c = Object.assign({}, DEF, cfg || {});
-    const G = { v: 1, cfg: c, T: c.T, t: 0, ph: 'prep', rs: hash(String(seed || 'dc')) || 7, pl: {}, ord: [], pr: [], tape: [], news: [], log: [], mac: [1, 1, 1], macT: [1, 1, 1], fc: 1, fcUntil: 0, rum: null, K: 0, seq: 0, hist: [], ev: [], s: 0, sc: 0, bn: 0, nid: 0, yl: c.tickSec, nl: 0 };
+    const G = { v: 1, cfg: c, T: c.T, t: 0, ph: 'prep', rs: hash(String(seed || 'dc')) || 7, pl: {}, ord: [], pr: [], tape: [], news: [], log: [], mac: [1, 1, 1], macT: [1, 1, 1], fc: 1, fcUntil: 0, rum: null, K: 0, seq: 0, hist: [], ev: [], s: 0, sc: 0, bn: 0, nid: 0, yl: c.tickSec, nl: 0, tips: [], tipPlan: [] };
     return G;
   }
   function addPlayer(G, id, name, bot) {
@@ -121,6 +121,8 @@
       return p;
     });
     G.pr.forEach((p, i) => { const a = baseAnchor(G, i, 0.5); p.A = a; p.At = a; p.P = a; p.pp = a; p.cc = [a, a, a, a]; p.ph = [round(a, 2)]; });
+    G.tips = []; G.tipPlan = [];
+    if (c.tips) { const y1 = clamp(Math.round(T * 0.3), 2, T - 3), y2 = clamp(Math.round(T * 0.68), y1 + 2, T - 1); G.tipPlan = [{ y: y1, f: 0.2 + rnd(G) * 0.5, k: 'up' }, { y: y2, f: 0.2 + rnd(G) * 0.5, k: 'down' }]; }
     // event schedule
     G.ev = [];
     if (c.events) {
@@ -178,7 +180,7 @@
     pl.cash -= cost; pl.hold[i] += S; pl.cost[i] += cost; p.z = q.z1; p.flow += q.x; p.vol += q.x; p.zmax = Math.max(p.zmax, p.z);
     setPrice(G, i); pl.tr++; pl.vol += q.x; pl.last = G.t; if (pl.seen.indexOf(i) < 0) pl.seen.push(i);
     G.fees = (G.fees || 0) + fee;
-    tape(G, pl, 'B', i, S, q.x / S);
+    tape(G, pl, 'B', i, S, q.x / S); tipHit(G, pl, i, 'B');
     return { ok: true, S, x: q.x, avg: q.x / S };
   }
   function otherPos(G, pl, skip) { let s = 0; for (let k = 0; k < NP; k++) if (k !== skip && pl.hold[k]) s += pl.hold[k] * G.pr[k].P; return s; }
@@ -192,7 +194,7 @@
     pl.cash += got; pl.rp[i] += got - basis; pl.hold[i] -= S; pl.cost[i] -= basis; p.z = Math.max(-2, q.z1); p.flow -= q.x; p.vol += q.x;
     setPrice(G, i); pl.tr++; pl.vol += q.x; pl.last = G.t;
     G.fees = (G.fees || 0) + fee;
-    tape(G, pl, 'S', i, S, q.x / S);
+    tape(G, pl, 'S', i, S, q.x / S); tipHit(G, pl, i, 'S');
     return { ok: true, S, x: q.x, avg: q.x / S, pnl: got - basis };
   }
   function tryDD(G, pl, i) {
@@ -275,6 +277,21 @@
     p.vm = Math.min(4.5, p.vm + Math.abs(size) * 16); recomputeAnchor(G, i, false);
   }
   const mag = (G, lo, hi) => lo + rnd(G) * (hi - lo);
+  // light-hearted stories: some move the stock a little, some mean nothing
+  const FUN = [
+    ['CEO caught in office affair', -0.045], ['corporate espionage suspected', -0.035], ['CFO resigns after expense scandal', -0.04], ['data breach leaks staff emails', -0.03], ['intern leaks roadmap on social media', -0.02], ['rival accuses it of stealing code', -0.025],
+    ['CEO runs marathon, staff cheer', 0.01], ['office dog goes viral', 0.015], ['wins best-workplace poll', 0.015], ['founder dates a pop star', 0.008],
+    ['coffee machine finally fixed', 0], ['CEO spotted in a clown suit', 0], ['bring-your-pet day ends in chaos', 0], ['new logo, nobody notices', 0], ['hackathon ends in food poisoning', -0.005], ['CEO quotes a movie in board meeting', 0],
+  ];
+  const FUNMAC = ['Investor conference ends in karaoke', 'Pigeon nests on exchange roof', 'Analyst predicts markets using a horoscope', 'Trader wins bet by eating his hat'];
+  function fakeTip(G, k) { // dubious tip: price spikes for a moment, then the crowd's money is the only thing left
+    const live = G.pr.filter(p => p.st === 'live' && !G.tips.some(t => t.i === p.i)); if (!live.length) return null;
+    const hi = live.filter(p => p.h >= 2), pool = hi.length ? hi : live, p = pool[Math.floor(rnd(G) * pool.length)];
+    const x = k === 'up' ? 'Forum post: buy ' + p.name + ' NOW, it will rise 25%!' : 'Anonymous tip: sell ' + p.name + ' NOW, it will crash 30%!';
+    p.nz = clamp(p.nz + (k === 'up' ? 0.13 : -0.13), -0.45, 0.45); p.vm = Math.min(4.5, p.vm + 1.5); setPrice(G, p.i);
+    G.tips.push({ i: p.i, k: k, s: G.s, t: G.t + 1, x: x, buyers: [] }); emit(G, x, p.i); return p.i;
+  }
+  function tipHit(G, pl, i, side) { if (pl.bot) return; for (const tp of G.tips) if (tp.i === i && ((tp.k === 'up' && side === 'B') || (tp.k === 'down' && side === 'S')) && G.s - tp.s <= 45 && tp.buyers.indexOf(pl.id) < 0) tp.buyers.push(pl.id); }
   function newsStep(G) {
     const R = () => rnd(G), t = G.t, yl = G.yl || G.cfg.tickSec, fr = G.sc / yl;
     // planned announcements before every funding round / IPO
@@ -296,6 +313,13 @@
       if (e.an || e.k === 'rumour' || e.t !== t + 1 || fr < 0.30 || R() > 0.05) continue; e.an = 1;
       emit(G, e.k === 'hype' ? 'Funds pile into deep tech' : e.k === 'winter' ? 'Central bank signals higher rates' : 'Industry giant eyes the core market', -1);
       G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, (e.k === 'hype' ? [0, 0.01, 0.035] : e.k === 'winter' ? [-0.015, -0.025, -0.04] : [-0.03, 0.01, 0.01])[p.h - 1]); });
+    }
+    // scheduled fake tips (attention checks)
+    for (const pl of G.tipPlan) if (!pl.done && G.t + 1 === pl.y && fr >= pl.f) { pl.done = 1; fakeTip(G, pl.k); }
+    // light-hearted stories
+    if (R() < 0.035) {
+      if (R() < 0.18) emit(G, FUNMAC[Math.floor(R() * FUNMAC.length)], -1);
+      else { const live = G.pr.filter(p => p.st === 'live'); if (live.length) { const p = live[Math.floor(R() * live.length)], f = FUN[Math.floor(R() * FUN.length)]; emit(G, p.name + ' ' + f[0], p.i); if (f[1]) shock(G, p.i, f[1] * (0.8 + R() * 0.8)); } }
     }
     // everyday company chatter
     if (R() < 0.16) {
@@ -462,7 +486,7 @@
     return {
       q: [round(qt(0), 3), round(qt(0.25), 3), round(qt(0.5), 3), round(qt(0.75), 3), round(qt(1), 3)],
       ddN: ddG.length, ddRet: ddG.length ? round(avg(ddG.map(ret)), 3) : null, noN: noDD.length, noRet: noDD.length ? round(avg(noDD.map(ret)), 3) : null,
-      corr: corr == null ? null : round(corr, 2), fees: Math.round(G.fees || 0), ddRev: Math.round(G.ddRev || 0),
+      tips: G.tips.map(tp => ({ x: tp.x, k: tp.k, c: tp.i, n: tp.buyers.map(id => G.pl[id].name) })), humans: hum.length, corr: corr == null ? null : round(corr, 2), fees: Math.round(G.fees || 0), ddRev: Math.round(G.ddRev || 0),
       alloc: G.hist.map(h => [h.t, round(h.alloc[0], 3), round(h.alloc[1], 3), round(h.alloc[2], 3), round(h.hhi, 3), Math.round(h.invested)]),
       proj: G.pr.map(p => ({ c: p.code, n: p.name, h: p.h, st: p.st, ph: p.ph, yc: yearCandles(p), q: round(p.q, 2), gl: p.gl, cls: Math.round(p.cls), zmax: round(p.zmax, 2), ex: p.exitV != null ? round(p.exitV, 2) : null })),
     };
@@ -510,6 +534,6 @@
     }
   }
 
-  const API = { open, resize, second, pushNews, hx, finals, yearCandles, EVN, recomputeAll, debrief, HP, PROJ, NP, STAGES, DEF, BOTS, hash, rndS, clamp, round, pGate, newGame, addPlayer, start, act, advance, netWorth, leaderboard, pub, tk, priv, consensus, baseAnchor, psi, nextGate, need, quoteBuy, quoteSell, sharesForCash, maxBuyShares, tryBuy, trySell, tryDD, botAct, fire, setupMarket, snapshot, evMult };
+  const API = { fakeTip, open, resize, second, pushNews, hx, finals, yearCandles, EVN, recomputeAll, debrief, HP, PROJ, NP, STAGES, DEF, BOTS, hash, rndS, clamp, round, pGate, newGame, addPlayer, start, act, advance, netWorth, leaderboard, pub, tk, priv, consensus, baseAnchor, psi, nextGate, need, quoteBuy, quoteSell, sharesForCash, maxBuyShares, tryBuy, trySell, tryDD, botAct, fire, setupMarket, snapshot, evMult };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.DC = API;
 })(typeof self !== 'undefined' ? self : this);

@@ -1,0 +1,21 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{
+  const br=await chromium.launch(); const errs=[];
+  const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h}});const p=await c.newPage();p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());return p;};
+  const host=await mk(1400,900); await host.goto(BASE+'#host=1'); await host.waitForSelector('#go');
+  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','4'); await host.fill('#sA',BASE); await host.uncheck('#sBk');
+  await host.click('#go'); await host.waitForSelector('#lstart'); const link=await host.locator('.mono.small').first().innerText();
+  const s=await mk(1200,850); await s.goto(link); await s.fill('#nm','Follower'); await s.click('#nb'); await s.waitForSelector('.prac'); await s.click('button[data-act="rdy"]');
+  await host.click('#lstart'); await s.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));
+  await host.click('[data-t="ctl"]'); await host.click('[data-tip="up"]');
+  await s.waitForFunction(()=>/Forum post/.test(document.querySelector('#ticker').innerText),null,{timeout:8000});
+  const line=(await s.locator('#ticker .ti.new, #ticker .ti').first().innerText()).replace(/\n/g,' '); console.log('ticker:',line);
+  const name=(line.match(/buy (\w+) NOW/)||[])[1]; const code=await s.evaluate(n=>DC.PROJ.findIndex(p=>p.name===n),name);
+  await s.click('tr.mk[data-i="'+code+'"]'); await s.waitForSelector('#tgo'); await s.click('button[data-a="5000"]'); await s.click('#tgo'); await s.waitForSelector('.toast:has-text("Bought")');
+  const p0=await s.locator('tr.mk[data-i="'+code+'"] td.pxc').count(); 
+  await host.click('[data-t="ctl"]'); await host.click('#cE'); await s.waitForSelector('tr.rr',{timeout:10000});
+  const txt=await s.locator('#cbody').innerText(); console.log('attention check line:',(txt.match(/Attention check[^\n]*/)||['MISSING'])[0].slice(0,200));
+  console.log('fun stories sample:',(await s.evaluate(()=>C.news.map(n=>n.x).filter(x=>/affair|espionage|dog|clown|scandal|karaoke|pigeon|marathon|coffee/i.test(x)).slice(0,3))).join(' | '));
+  console.log('ERRORS',errs.length?errs:'none'); await br.close();
+})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});
