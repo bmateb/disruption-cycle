@@ -162,7 +162,7 @@ function renderHost(full) {
   }
   $('#htabs').innerHTML = [['board', 'Market board'], ['class', 'Class & participation'], ['proj', 'Company & fund detail'], ['ctl', 'Controls'], ['res', 'Final results']].map(t => '<button class="tab' + (Host.tab === t[0] ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>').join('');
   $$('#htabs .tab').forEach(b => b.onclick = () => { Host.tab = b.dataset.t; renderHost(); });
-  $('#hctl').innerHTML = '<button class="btn sm" id="bQ">📱 Join QR</button>' + (G.ph === 'run' || G.ph === 'pause' ? '<button class="btn sm" id="bP">' + (G.ph === 'pause' ? 'Resume' : 'Pause') + '</button><button class="btn sm" id="bN">Next year</button>' : '') + (G.ph === 'end' ? '<span class="chip good">Game over</span>' : '');
+  $('#hctl').innerHTML = SND_BTN + '<button class="btn sm" id="bQ">📱 Join QR</button>' + (G.ph === 'run' || G.ph === 'pause' ? '<button class="btn sm" id="bP">' + (G.ph === 'pause' ? 'Resume' : 'Pause') + '</button><button class="btn sm" id="bN">Next year</button>' : '') + (G.ph === 'end' ? '<span class="chip good">Game over</span>' : '');
   const bQ = $('#bQ'); if (bQ) bQ.onclick = showJoinQR; const bP = $('#bP'); if (bP) bP.onclick = hostPause; const bN = $('#bN'); if (bN) bN.onclick = hostTickNow;
   renderHostLive(true);
 }
@@ -208,6 +208,7 @@ function pubOf() { return DC.pub(Host.G); }
 function renderHostLive(force) {
   const G = Host.G, body = $('#hbody'); if (!G || !body || G.ph === 'prep') { if (G && G.ph === 'prep') renderLobbyLive(); return; }
   const pub = pubOf(), tk = DC.tk(G); updateTape($('#mq'), pub, tk);
+  SFX.watch({ ph: G.ph, t: G.t, bk: Host.brk && G.ph === 'pause' ? Host.brk.until : 0, mj: Host.brk && Host.brk.ev ? G.maj : [], news: G.news.slice(0, 5), now: Date.now() });
   const left = G.ph === 'run' ? Math.max(0, hostTE() - Date.now()) : Host.paused ? Host.remain : 0;
   $('#hclk').textContent = G.ph === 'end' ? 'Game over' : Host.brk && G.ph === 'pause' ? (Host.brk.ev ? 'MAJOR NEWS' : 'PLANNING BREAK') + ' · year ' + Math.min(G.t + 1, G.T) + ' starts in ' + mmss(Host.brk.until - Date.now()) : (G.ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(G.t + 1, G.T) + ' / ' + G.T + ' · ' + mmss(left);
   $('#hbar').style.width = (G.ph === 'end' ? 100 : 100 - left / ((G.yl || G.cfg.tickSec) * 1000) * 100) + '%';
@@ -260,6 +261,7 @@ function renderLobby() {
   renderHostChrome(); renderLobbyLive();
 }
 function renderLobbyLive() {
+  SFX.watch({ ph: 'prep', t: 0, bk: 0, mj: [], news: [], now: Date.now() });
   const G = Host.G, u = $('#lusers'); if (!u) return; const hs = G.ord.filter(id => !G.pl[id].bot), rd = hs.filter(id => G.pl[id].rdy).length;
   u.innerHTML = hs.map(id => '<span class="pill' + (G.pl[id].rdy ? ' rdy' : humanOnline(id) ? '' : ' off') + '">' + (G.pl[id].rdy ? '✓ ' : '') + esc(G.pl[id].name) + '</span>').join('') || '<span class="faint small">Waiting for the first student…</span>';
   $('#lcnt').textContent = hs.length + (G.nbots ? ' + ' + G.nbots + ' bots' : ''); $('#lrdy').textContent = rd + ' ready';

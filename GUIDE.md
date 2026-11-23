@@ -112,3 +112,20 @@ Three extra instruments sit under the company table on the Market tab. They trad
 
 - **Host Market board:** a grid with one live candle chart per instrument (12 companies, 2 bonds, the index), each with price, change and since-open. Click any card to open an enlarged window with the full chart (live or by year) and details. Close it with the button or by clicking outside.
 - **Price announcer:** a stock-exchange style scrolling bar at the very top of the host and student screens shows every code, price and change since open. It pauses on hover and stops moving if the device asks for reduced motion.
+
+## Version 9: sounds
+
+All sounds are synthesised in the browser (no audio files). A 🔊 button in the header of the host and student screens switches them on or off and remembers the choice. Browsers only allow sound after a first tap or click, which joining and starting already provide.
+
+| Moment | Sound |
+|---|---|
+| Market opens (game start, end of a break) | Opening bell |
+| Year closes | Closing bell |
+| Major news / market-wide event | News alert |
+| Round or IPO passed, company acquired | Rising chime |
+| Round or IPO failed | Falling thud |
+| Last 5 seconds of a break | Ticks, then three beeps |
+| Student trade confirmed / rejected | Up-down blip / buzz |
+| Game over | Fanfare |
+
+Hot tips and ordinary company news are silent on purpose, so the sound does not give away the attention check.

@@ -286,3 +286,7 @@ table.fit{margin-top:0}
 
 .lbt tr.lrow{cursor:pointer}.lbt tr.lrow:hover{background:var(--sunk)}.lbt .lname{text-decoration:underline dotted;text-underline-offset:3px}
 .mbox.wide.legend{max-width:680px}.mbox.wide.legend table td,.mbox.wide.legend table th{white-space:nowrap}
+
+/* v10: sound toggle */
+.sndb{border:1px solid var(--line);background:var(--surface);border-radius:8px;min-width:34px;height:30px;font-size:16px;cursor:pointer;padding:0 6px}
+.sndb .soff{display:none}html[data-sound="off"] .sndb .son{display:none}html[data-sound="off"] .sndb .soff{display:inline}
