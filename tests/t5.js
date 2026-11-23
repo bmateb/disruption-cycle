@@ -6,7 +6,7 @@ const OUT=__dirname+'/';
   const mk=async(w,h,name)=>{const ctx=await br.newContext({viewport:{width:w,height:h}});const p=await ctx.newPage();p.on('pageerror',e=>errs.push(name+' PAGEERR '+e.message));p.on('console',m=>{if(m.type()==='error'&&!/WebSocket|ERR_/.test(m.text()))errs.push(name+' CONSOLE '+m.text())});p.on('dialog',d=>d.accept());return p;};
   const host=await mk(1400,900,'host');
   await host.goto(BASE+'#host=1'); await host.waitForSelector('#go');
-  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','4'); await host.fill('#sA',BASE);
+  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','4'); await host.fill('#sA',BASE); await host.uncheck('#sBk');
   await host.click('#go'); await host.waitForSelector('#lstart',{timeout:20000});
   const link=await host.locator('.mono.small').first().innerText(); console.log('join link',link);
   const st=[];

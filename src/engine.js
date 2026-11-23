@@ -25,7 +25,8 @@
   const NP = PROJ.length;
   const STAGES = ['Seed', 'Series A', 'Series B', 'Listed'];
   const EVN = ['Series A round', 'Series B round', 'IPO'];
-  const VOLS = { 1: 0.0016, 2: 0.0026, 3: 0.0042 }; // per-second market noise by risk class
+  const VOLS = { 1: 0.0022, 2: 0.0036, 3: 0.0060 };
+  const TRD = { 1: 0.0004, 2: 0.0007, 3: 0.0012 }; // persistent trend drift (staircase runs) // per-second market noise by risk class
   const GLIDE = 0.12; // share of the gap between anchor and target closed each second
   const DEF = {
     T: 14, tickSec: 75, cash0: 100000, fee: 0.005, ddCost: 1500, maxExp: 0.4,
@@ -113,7 +114,7 @@
       }
       const q = clamp(0.5 + (rnd(G) * 2 - 1) * 0.38 + (rnd(G) - 0.5) * 0.04, 0.12, 0.92);
       const burn = H.burn * G.K;
-      const p = { i, code: d.code, name: d.name, h: d.h, line: d.line, q, gates, gi: 0, stage: 0, v: 1, cash: burn * gates[0] * 0.55, burn, st: 'live', obs: [], sent: 1, z: 0, A: d.p, P: d.p, flow: 0, flowP: 0, vol: 0, D: c.depthF * G.K / NP * H.depth, ph: [d.p], zmax: 0, raised: 0, cls: 0, exitV: null, ups: [], ddseed: (rnd(G) * 1e9) | 0, sf: 0, lg: 0, gl: [], At: d.p, nz: 0, pp: d.p, cc: [d.p, d.p, d.p, d.p], cd: [], an: {}, jump: false };
+      const p = { i, code: d.code, name: d.name, h: d.h, line: d.line, q, gates, gi: 0, stage: 0, v: 1, cash: burn * gates[0] * 0.55, burn, st: 'live', obs: [], sent: 1, z: 0, A: d.p, P: d.p, flow: 0, flowP: 0, vol: 0, D: c.depthF * G.K / NP * H.depth, ph: [d.p], zmax: 0, raised: 0, cls: 0, exitV: null, ups: [], ddseed: (rnd(G) * 1e9) | 0, sf: 0, lg: 0, gl: [], At: d.p, nz: 0, vm: 1, tr: 0, fade: null, pp: d.p, cc: [d.p, d.p, d.p, d.p], cd: [], an: {}, jump: false };
       // calibrate v so that the opening anchor equals the listed price
       p.v = 1; const base = baseAnchor({ T: T, t: 0, pr: [p], mac: [1, 1, 1] }, 0, 0.5);
       p.v = d.p / base;
@@ -241,10 +242,13 @@
     const R = () => rnd(G), dec = Math.pow(1 - G.cfg.lam, 1 / G.cfg.tickSec);
     for (let i = 0; i < NP; i++) {
       const p = G.pr[i]; p.pp = p.P;
+      if (p.st === 'dead' && p.fade) { const f = p.fade; f.n++; p.P = f.to + (f.from - f.to) * Math.exp(-f.n / 6) * (1 + 0.12 * Math.sin(f.n * 1.3)); if (f.n >= 30) { p.P = f.to; p.fade = null; } touch(p); }
       if (p.st !== 'live') continue;
       p.z *= dec;
       p.A += (p.At - p.A) * GLIDE;
-      p.nz = p.nz * 0.94 + VOLS[p.h] * norm(R);
+      p.vm = 1 + (p.vm - 1) * 0.97;
+      p.tr = p.tr * 0.96 + TRD[p.h] * norm(R);
+      p.nz = clamp(p.nz * 0.94 + VOLS[p.h] * p.vm * norm(R) + p.tr, -0.45, 0.45);
       setPrice(G, i);
     }
     if (G.cfg.news) newsStep(G);
@@ -265,20 +269,25 @@
   const NEU = ['hiring continues', 'attends trade fair', 'opens a new office', 'updates its roadmap', 'new CFO starts'];
   function pick(G, a) { return a[Math.floor(rnd(G) * a.length)]; }
   function emit(G, x, c, y) { pushNews(G, [{ x, c }], y == null ? G.t + 1 : y); }
-  function nudge(G, i, f) { const p = G.pr[i]; p.sent = clamp(p.sent * f, 0.8, 1.25); recomputeAnchor(G, i, false); }
+  function shock(G, i, size) { // news impulse: part spikes and fades (overshoot), part lasts, volatility clusters
+    const p = G.pr[i]; if (p.st !== 'live') return;
+    p.nz = clamp(p.nz + size * 0.5, -0.45, 0.45); p.sent = clamp(p.sent * Math.exp(size * 0.5), 0.7, 1.4);
+    p.vm = Math.min(4.5, p.vm + Math.abs(size) * 16); recomputeAnchor(G, i, false);
+  }
+  const mag = (G, lo, hi) => lo + rnd(G) * (hi - lo);
   function newsStep(G) {
     const R = () => rnd(G), t = G.t, yl = G.yl || G.cfg.tickSec, fr = G.sc / yl;
     // planned announcements before every funding round / IPO
     for (let i = 0; i < NP; i++) {
       const p = G.pr[i]; if (p.st !== 'live') continue; const g = nextGate(G, i); if (g == null) continue;
       const yrs = g - t, ev = EVN[p.gi], k = p.gi + '';
-      if (yrs === 2 && !p.an[k + 'f'] && fr > 0.35 && R() < 0.03) { p.an[k + 'f'] = 1; emit(G, p.name + ': ' + ev + ' planned next year', i); }
+      if (yrs === 2 && !p.an[k + 'f'] && fr > 0.35 && R() < 0.03) { p.an[k + 'f'] = 1; emit(G, p.name + ': ' + ev + ' planned next year', i); shock(G, i, mag(G, 0.008, 0.02)); }
       if (yrs === 1) {
-        if (!p.an[k + 'n'] && fr > 0.10 && R() < 0.035) { p.an[k + 'n'] = 1; emit(G, p.name + ': ' + ev + ' this year', i); }
-        if (!p.an[k + 'c'] && fr > 0.42 && R() < 0.05) { p.an[k + 'c'] = 1; const ps = psi(G, i); emit(G, p.name + ': ' + (ps < 0.55 ? 'cash running low' : ps > 0.95 ? 'well funded' : 'funding on track'), i); }
+        if (!p.an[k + 'n'] && fr > 0.10 && R() < 0.035) { p.an[k + 'n'] = 1; emit(G, p.name + ': ' + ev + ' this year', i); shock(G, i, mag(G, 0.01, 0.03)); }
+        if (!p.an[k + 'c'] && fr > 0.42 && R() < 0.05) { p.an[k + 'c'] = 1; const ps = psi(G, i); emit(G, p.name + ': ' + (ps < 0.55 ? 'cash running low' : ps > 0.95 ? 'well funded' : 'funding on track'), i); shock(G, i, ps < 0.55 ? -mag(G, 0.03, 0.07) : ps > 0.95 ? mag(G, 0.015, 0.04) : 0); }
         if (!p.an[k + 't'] && fr > 0.62 && R() < 0.09) {
           p.an[k + 't'] = 1; const sg = p.q + norm(R) * 0.12;
-          emit(G, p.name + ': ' + (sg >= 0.58 ? 'insiders upbeat on ' + ev : sg <= 0.42 ? 'insiders doubt ' + ev : ev + ' outcome unclear'), i);
+          emit(G, p.name + ': ' + (sg >= 0.58 ? 'insiders upbeat on ' + ev : sg <= 0.42 ? 'insiders doubt ' + ev : ev + ' outcome unclear'), i); shock(G, i, sg >= 0.58 ? mag(G, 0.04, 0.09) : sg <= 0.42 ? -mag(G, 0.05, 0.11) : 0);
         }
       }
     }
@@ -286,6 +295,7 @@
     for (const e of G.ev) {
       if (e.an || e.k === 'rumour' || e.t !== t + 1 || fr < 0.30 || R() > 0.05) continue; e.an = 1;
       emit(G, e.k === 'hype' ? 'Funds pile into deep tech' : e.k === 'winter' ? 'Central bank signals higher rates' : 'Industry giant eyes the core market', -1);
+      G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, (e.k === 'hype' ? [0, 0.01, 0.035] : e.k === 'winter' ? [-0.015, -0.025, -0.04] : [-0.03, 0.01, 0.01])[p.h - 1]); });
     }
     // everyday company chatter
     if (R() < 0.16) {
@@ -293,8 +303,9 @@
       const w = live.map(p => { const g = nextGate(G, p.i); return (g != null && g - t <= 1 ? 3 : 1) * (G.sc - (p.nl || -99) < 8 ? 0.15 : 1); });
       let x = R() * w.reduce((a, b) => a + b, 0), j = 0; while (j < live.length - 1 && (x -= w[j]) > 0) j++;
       const p = live[j]; p.nl = G.sc; const sg = p.q + norm(R) * 0.22;
-      if (sg > 0.58) { emit(G, p.name + ': ' + pick(G, POS), p.i); nudge(G, p.i, 1.008); }
-      else if (sg < 0.42) { emit(G, p.name + ': ' + pick(G, NEG), p.i); nudge(G, p.i, 0.992); }
+      const big = R() < 0.12 ? 2.6 : 1; // occasional headline that really moves the stock
+      if (sg > 0.58) { emit(G, p.name + ': ' + pick(G, POS), p.i); shock(G, p.i, mag(G, 0.012, 0.03) * big); }
+      else if (sg < 0.42) { emit(G, p.name + ': ' + pick(G, NEG), p.i); shock(G, p.i, -mag(G, 0.012, 0.035) * big); }
       else emit(G, p.name + ': ' + pick(G, NEU), p.i);
     }
   }
@@ -347,33 +358,33 @@
     const ev = EVN[p.gi];
     if (pass) {
       const up = H.u * (0.92 + 0.16 * R());
-      p.v *= up; p.stage++; p.gi++; p.ups.push(round(up, 2)); p.jump = true;
+      p.v *= up; p.stage++; p.gi++; p.ups.push(round(up, 2)); p.jump = true; p.nz = clamp(p.nz + mag(G, 0.04, 0.09), -0.45, 0.45); p.vm = 3;
       const nn = nextGate(G, i);
       if (nn != null) p.cash += p.burn * (nn - G.t) * 0.4; // outside round
       news.push({ x: p.name + ': ' + ev + ' succeeds' + (ps < 0.6 ? ', cash nearly gone' : '. Shares jump'), c: i });
     } else {
-      p.st = 'dead'; p.gi++; p.P = Math.max(0.2, p.P * 0.05); p.A = p.P; p.At = p.P; p.z = 0; p.nz = 0; touch(p);
+      p.st = 'dead'; p.gi++; const lo = Math.max(0.2, p.P * 0.05); p.fade = { from: Math.max(lo, p.P * 0.32), to: lo, n: 0 }; p.P = p.fade.from; p.A = p.P; p.At = p.P; p.z = 0; p.nz = 0; touch(p);
       news.push({ x: p.name + ': ' + ev + ' fails' + (ps < 0.6 ? ', cash ran out' : '') + '. Shares collapse', c: i });
     }
   }
   function fire(G, k, news) {
     const R = () => rnd(G);
     if (k === 'hype') {
-      G.mac[2] *= 1.30; G.macT[2] = 1.0;
+      G.mac[2] *= 1.30; G.macT[2] = 1.0; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [0, 0.03, 0.09][p.h - 1]); });
       news.push({ x: 'Deep-tech frenzy: high-risk stocks surge', c: -1 });
     } else if (k === 'winter') {
       G.mac[0] *= 0.93; G.mac[1] *= 0.86; G.mac[2] *= 0.74; G.macT = [0.97, 0.94, 0.88];
-      G.fc = 0.35; G.fcUntil = G.t + 3;
+      G.fc = 0.35; G.fcUntil = G.t + 3; G.pr.forEach(p => { if (p.st === 'live') shock(G, p.i, [-0.05, -0.08, -0.12][p.h - 1]); });
       news.push({ x: 'Rates rise, funding dries up, stocks fall', c: -1 });
     } else if (k === 'disrupt') {
-      G.mac[0] *= 0.88; G.macT[0] = Math.min(G.macT[0], 0.9); G.mac[1] *= 1.06; G.macT[1] = Math.max(G.macT[1], 1.0);
+      G.mac[0] *= 0.88; G.macT[0] = Math.min(G.macT[0], 0.9); G.mac[1] *= 1.06; G.macT[1] = Math.max(G.macT[1], 1.0); G.pr.forEach(p => { if (p.st === 'live' && p.h < 3) shock(G, p.i, p.h === 1 ? -0.09 : 0.04); });
       news.push({ x: 'Disruptor hits core markets: low-risk stocks drop', c: -1 });
     } else if (k === 'rumour') {
       const cand = G.pr.filter(p => p.st === 'live' && p.h >= 2 && p.stage < 3);
       if (!cand.length) return;
       const p = cand[Math.floor(R() * cand.length)];
       const real = R() < 0.5;
-      G.rum = { i: p.i, t2: G.t + 2, real }; p.sent *= 1.15;
+      G.rum = { i: p.i, t2: G.t + 2, real }; p.sent *= 1.15; shock(G, p.i, 0.08);
       news.push({ x: 'Rumour: ' + p.name + ' may be acquired', c: p.i });
     }
     G.log.push({ t: G.t, k });
@@ -386,7 +397,7 @@
       for (const id of G.ord) { const pl = G.pl[id]; if (pl.hold[p.i]) { const pay = pl.hold[p.i] * px; pl.rp[p.i] += pay - pl.cost[p.i]; pl.cash += pay; pl.hold[p.i] = 0; pl.cost[p.i] = 0; } }
       news.push({ x: p.name + ' acquired at ' + round(px, 1) + ' per share. Holders paid out', c: p.i });
     } else {
-      p.sent *= 0.80; news.push({ x: p.name + ': takeover talks off', c: p.i });
+      p.sent *= 0.80; shock(G, p.i, -0.07); news.push({ x: p.name + ': takeover talks off', c: p.i });
     }
   }
   function settle(G, news) {

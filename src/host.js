@@ -1,7 +1,7 @@
 /* host console: authoritative market maker running in the facilitator's browser */
 const Host = { G: null, net: null, room: '', url: '', bi: 0, st: 'down', dirtyPub: true, dirtyTk: true, dirtyPriv: new Set(), tab: 'board', sel: 0, setup: null, pubBase: '', started: false, paused: false, remain: 0, sawAt: {}, wake: null, ns: 0, nsOff: 1000, tf: 'live', openP: new Set(), dirtyHx: true, hxAt: 0, endShown: false };
 
-function hostSave() { try { localStorage.setItem('dcap-host-' + Host.room, JSON.stringify({ G: Host.G, bi: Host.bi, bu: Host.bu, url: Host.url, pubBase: Host.pubBase, paused: Host.paused, remain: Host.remain, nsOff: Host.nsOff })); localStorage.setItem('dcap-host-last', Host.room); } catch (e) { } }
+function hostSave() { try { localStorage.setItem('dcap-host-' + Host.room, JSON.stringify({ G: Host.G, bi: Host.bi, bu: Host.bu, url: Host.url, pubBase: Host.pubBase, paused: Host.paused, remain: Host.remain, nsOff: Host.nsOff, brk: Host.brk })); localStorage.setItem('dcap-host-last', Host.room); } catch (e) { } }
 function hostLoad(room) { try { return JSON.parse(localStorage.getItem('dcap-host-' + room)); } catch (e) { return null; } }
 
 function hostConnect() {
@@ -48,7 +48,7 @@ function hostFlush() {
   const G = Host.G, n = Host.net; if (!n || Host.st !== 'up') return;
   const te = hostTE();
   if (Host.dirtyTk) { Host.dirtyTk = false; n.send('tk', Object.assign(DC.tk(G), { te: te, ts: Date.now(), pz: Host.paused ? Host.remain : 0 })); }
-  if (Host.dirtyPub) { Host.dirtyPub = false; n.send('pub', Object.assign(DC.pub(G), { te: te, ts: Date.now(), pz: Host.paused ? 1 : 0 })); }
+  if (Host.dirtyPub) { Host.dirtyPub = false; n.send('pub', Object.assign(DC.pub(G), { te: te, ts: Date.now(), pz: Host.paused ? 1 : 0, bk: Host.brk ? Host.brk.until : 0 })); }
   if (Host.dirtyHx && Date.now() - Host.hxAt > 3000) { Host.dirtyHx = false; Host.hxAt = Date.now(); n.send('hx', DC.hx(G)); }
   for (const id of Host.dirtyPriv) { const p = DC.priv(G, id); if (p) n.send('u/' + id, p); }
   Host.dirtyPriv.clear();
@@ -59,17 +59,21 @@ function hostStart() {
   markAll(); Host.dirtyHx = true; hostSave(); renderHost(true);
 }
 function markAll() { Host.dirtyPub = Host.dirtyTk = true; Host.G.ord.forEach(id => Host.dirtyPriv.add(id)); }
+function startBreak() {
+  const G = Host.G; if (!G.cfg.brk || G.ph !== 'run') return;
+  G.ph = 'pause'; Host.paused = true; Host.remain = 0; Host.nsOff = 1000; Host.brk = { until: Date.now() + Math.max(5, G.cfg.brkSec || 30) * 1000 };
+}
 function hostYear() { // year boundary: gate results, new readings, news, settlement
-  const G = Host.G; DC.advance(G); markAll(); Host.dirtyHx = true; hostSave(); if (G.ph === 'end') Host.dirtyHx = true; renderHost();
+  const G = Host.G; DC.advance(G); startBreak(); markAll(); Host.dirtyHx = true; hostSave(); renderHost();
 }
 function hostTickNow() { const G = Host.G; if (G.ph !== 'run') return; hostYear(); Host.ns = Date.now() + 1000; }
 function hostPause() {
   const G = Host.G, now = Date.now();
   if (G.ph === 'run') { Host.remain = Math.max(0, hostTE() - now); Host.nsOff = Math.max(0, Host.ns - now); G.ph = 'pause'; Host.paused = true; }
-  else if (G.ph === 'pause') { G.ph = 'run'; Host.paused = false; Host.ns = now + Host.nsOff; }
+  else if (G.ph === 'pause') { G.ph = 'run'; Host.paused = false; Host.brk = null; Host.ns = now + Host.nsOff; }
   markAll(); hostSave(); renderHost();
 }
-function hostEndNow() { const G = Host.G; if (G.ph === 'pause') { G.ph = 'run'; Host.paused = false; } let guard = 40; while (G.ph === 'run' && guard--) DC.advance(G); markAll(); Host.dirtyHx = true; hostSave(); renderHost(); }
+function hostEndNow() { const G = Host.G; if (G.ph === 'pause') { G.ph = 'run'; Host.paused = false; Host.brk = null; } let guard = 40; while (G.ph === 'run' && guard--) DC.advance(G); markAll(); Host.dirtyHx = true; hostSave(); renderHost(); }
 function hostFire(k) { const G = Host.G; const news = []; DC.fire(G, k, news); DC.recomputeAll(G); DC.pushNews(G, news, G.t + 1); Host.dirtyTk = Host.dirtyPub = true; renderHost(); }
 function hostLoop() {
   const G = Host.G; if (!G) return;
@@ -83,6 +87,7 @@ function hostLoop() {
     }
     if (guard >= 90) Host.ns = now + 1000;
   }
+  else if (G.ph === 'pause' && Host.brk && now >= Host.brk.until) hostPause();
   hostFlush();
 }
 function hostAutosave() { if (Host.G) hostSave(); }
@@ -104,7 +109,7 @@ function hostSetupView() {
     '<div class="field hide" id="cu"><label>Broker URL</label><input id="sU" placeholder="wss://example.hivemq.cloud:8884/mqtt"></div>' +
     '<div class="field"><label>Address students will open</label><input id="sA" value="' + esc(isFile ? '' : location.href.split('#')[0]) + '" placeholder="https://… (where you published this file)"></div>' +
     (isFile ? '<div class="note warn">This file is opened from your computer, so phones cannot reach it. Publish it on any free static host first (see the guide), then open it from that address.</div>' : '') +
-    '<div class="row"><label class="small"><input type="checkbox" id="sE" checked> Market-wide events (boom, funding winter, disruptor, takeover rumour)</label><label class="small"><input type="checkbox" id="sNw" checked> Company news headlines</label><label class="small"><input type="checkbox" id="sX"> Hide names on trade feed</label></div>' +
+    '<div class="row"><label class="small"><input type="checkbox" id="sE" checked> Market-wide events (boom, funding winter, disruptor, takeover rumour)</label><label class="small"><input type="checkbox" id="sNw" checked> Company news headlines</label></div><div class="row" style="margin-top:8px"><label class="small"><input type="checkbox" id="sBk" checked> Planning break at the end of every year</label><label class="small">for <input id="sBs" type="number" min="5" max="300" value="30" style="width:70px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"> seconds</label><label class="small"><input type="checkbox" id="sX"> Hide names on trade feed</label></div>' +
     '<div class="row" style="margin-top:12px"><button class="btn pri" id="go">Test relay and open lobby</button><span id="gs" class="small muted"></span></div></div></div></div>';
   $('#sR').onchange = e => $('#cu').classList.toggle('hide', e.target.value !== 'custom');
   const rs = $('#resume'); if (rs) rs.onclick = () => hostResume(last, saved);
@@ -117,7 +122,7 @@ function hostSetupView() {
     if (!r.ok && sel !== 'local' && sel !== 'custom') { for (let k = 0; k < BROKERS.length; k++) { if (k === bi) continue; gs.textContent = BROKERS[bi].n + ' unreachable, trying ' + BROKERS[k].n + '…'; const r2 = await brokerTest(BROKERS[k].u, 7000); if (r2.ok) { bi = k; url = BROKERS[k].u; r = r2; break; } } }
     if (!r.ok) { gs.innerHTML = '<span class="err">No relay reachable from this network (' + esc(r.err || '') + '). Try a phone hotspot, another relay, or your own broker.</span>'; return; }
     Host.url = url; Host.bi = bi; Host.bu = bu; Host.room = roomCode(); Host.pubBase = ($('#sA').value.trim() || location.href.split('#')[0]).split('#')[0];
-    const cfg = { T: Math.max(8, Math.min(24, +$('#sT').value || 14)), tickSec: Math.max(20, Math.min(240, Math.round((+$('#sS').value || 75) / 5) * 5)), events: $('#sE').checked, news: $('#sNw').checked, anon: $('#sX').checked };
+    const cfg = { T: Math.max(8, Math.min(24, +$('#sT').value || 14)), tickSec: Math.max(20, Math.min(240, Math.round((+$('#sS').value || 75) / 5) * 5)), events: $('#sE').checked, news: $('#sNw').checked, brk: $('#sBk').checked, brkSec: Math.max(5, Math.min(300, +$('#sBs').value || 30)), anon: $('#sX').checked };
     Host.G = DC.newGame(cfg, Host.room + Date.now()); Host.G.nbots = Math.max(0, Math.min(30, +$('#sB').value || 0)); Host.expected = +$('#sN').value || 30;
     for (let k = 0; k < Host.G.nbots; k++) DC.addPlayer(Host.G, 'bot' + k, ['Ada', 'Bela', 'Cleo', 'Dora', 'Emil', 'Fanni', 'Gabor', 'Hanna', 'Imre', 'Jolan', 'Kata', 'Laszlo', 'Mira', 'Nora', 'Oszkar', 'Panni', 'Rita', 'Samu', 'Tibor', 'Vera', 'Zsof', 'Adam', 'Bence', 'Csilla', 'David', 'Eszter', 'Feri', 'Gergo', 'Hajni', 'Ildi'][k] + ' (bot)', DC.BOTS[k % DC.BOTS.length]);
     DC.open(Host.G, Host.expected + Host.G.nbots);
@@ -125,7 +130,7 @@ function hostSetupView() {
   };
 }
 function hostResume(room, saved) {
-  Host.room = room; Host.G = saved.G; Host.bi = saved.bi; Host.url = saved.url; Host.pubBase = saved.pubBase; Host.paused = saved.paused; Host.remain = saved.remain; Host.nsOff = saved.nsOff || 1000; Host.bu = saved.bu; Host.ns = Date.now() + 1500; Host.dirtyHx = true;
+  Host.room = room; Host.G = saved.G; Host.bi = saved.bi; Host.url = saved.url; Host.pubBase = saved.pubBase; Host.paused = saved.paused; Host.remain = saved.remain; Host.nsOff = saved.nsOff || 1000; Host.brk = saved.brk || null; Host.bu = saved.bu; Host.ns = Date.now() + 1500; Host.dirtyHx = true;
   hostBoot(true);
 }
 function hostEntry(P) { const r = (P.get('r') || '').toUpperCase(); const s = r && hostLoad(r); if (s && s.G) hostResume(r, s); else hostSetupView(); }
@@ -163,7 +168,7 @@ function renderHostLive(force) {
   const G = Host.G, body = $('#hbody'); if (!G || !body || G.ph === 'prep') { if (G && G.ph === 'prep') renderLobbyLive(); return; }
   const pub = pubOf(), tk = DC.tk(G);
   const left = G.ph === 'run' ? Math.max(0, hostTE() - Date.now()) : Host.paused ? Host.remain : 0;
-  $('#hclk').textContent = G.ph === 'end' ? 'Game over' : (G.ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(G.t + 1, G.T) + ' / ' + G.T + ' · ' + mmss(left);
+  $('#hclk').textContent = G.ph === 'end' ? 'Game over' : Host.brk && G.ph === 'pause' ? 'PLANNING BREAK · year ' + Math.min(G.t + 1, G.T) + ' starts in ' + mmss(Host.brk.until - Date.now()) : (G.ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(G.t + 1, G.T) + ' / ' + G.T + ' · ' + mmss(left);
   $('#hbar').style.width = (G.ph === 'end' ? 100 : 100 - left / ((G.yl || G.cfg.tickSec) * 1000) * 100) + '%';
   $('#hon').textContent = G.ord.filter(id => !G.pl[id].bot && humanOnline(id)).length + '/' + G.ord.filter(id => !G.pl[id].bot).length;
   let inv = 0; for (const id of G.ord) { const pl = G.pl[id]; for (let i = 0; i < DC.NP; i++) inv += pl.hold[i] * G.pr[i].P; } $('#hvol').textContent = eurK(inv);
@@ -194,10 +199,11 @@ function renderClassTab(body, G, pub, tk) {
 }
 function topShare(G) { const byP = G.pr.map((p, i) => { let s = 0; for (const id of G.ord) s += G.pl[id].hold[i] * p.P; return s; }); const tot = byP.reduce((a, b) => a + b, 0) || 1; return byP.sort((a, b) => b - a).slice(0, 3).reduce((a, b) => a + b, 0) / tot; }
 function renderCtl(body, G) {
-  body.innerHTML = '<div class="cols"><div class="panel"><h2>Market controls</h2><div class="pb"><div class="row" style="margin-bottom:10px"><button class="btn" id="cP">' + (G.ph === 'pause' ? 'Resume' : 'Pause market') + '</button><button class="btn" id="cN">Jump to year end now</button><button class="btn" id="cX15">+15 s this year</button><button class="btn sell" id="cE">End game now</button></div>' +
-    '<h3 style="margin:14px 0 6px">Trigger a market event now</h3><p class="small muted">Use it as a teaching moment. Scheduled events already fire on their own (with a short warning headline first) if switched on.</p><div class="row"><button class="btn sm" data-e="hype">Deep-tech frenzy</button><button class="btn sm" data-e="winter">Funding winter</button><button class="btn sm" data-e="disrupt">Disruptor hits the core</button><button class="btn sm" data-e="rumour">Takeover rumour</button></div></div></div>' +
+  body.innerHTML = '<div class="cols"><div class="panel"><h2>Market controls</h2><div class="pb"><div class="row" style="margin-bottom:10px"><button class="btn" id="cP">' + (G.ph === 'pause' ? (Host.brk ? 'Start next year now' : 'Resume') : 'Pause market') + '</button><button class="btn" id="cN">Jump to year end now</button><button class="btn" id="cX15">+15 s this year</button><button class="btn sell" id="cE">End game now</button></div>' +
+    '<h3 style="margin:14px 0 6px">Planning break between years</h3><div class="row"><label class="small"><input type="checkbox" id="cBk" ' + (G.cfg.brk ? 'checked' : '') + '> Pause at the end of every year</label><label class="small">for <input id="cBs" type="number" min="5" max="300" value="' + (G.cfg.brkSec || 30) + '" style="width:70px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)"> seconds</label></div><p class="small muted">During a break prices are frozen and trading is closed. Students can read the news, the charts and their portfolio. Applies from the next year end.</p><h3 style="margin:14px 0 6px">Trigger a market event now</h3><p class="small muted">Use it as a teaching moment. Scheduled events already fire on their own (with a short warning headline first) if switched on.</p><div class="row"><button class="btn sm" data-e="hype">Deep-tech frenzy</button><button class="btn sm" data-e="winter">Funding winter</button><button class="btn sm" data-e="disrupt">Disruptor hits the core</button><button class="btn sm" data-e="rumour">Takeover rumour</button></div></div></div>' +
     '<div class="panel"><h2>Session</h2><div class="pb"><p class="small">Join code <b class="mono">' + esc(joinCode()) + '</b> · relay <span class="mono small">' + esc(Host.url) + '</span></p><p class="small muted">Relay status: ' + Host.st + (Host.stDetail ? ' (' + esc(Host.stDetail) + ')' : '') + '. If the relay drops, students reconnect on their own and everything resumes.</p><label class="small"><input type="checkbox" id="cA" ' + (G.cfg.anon ? 'checked' : '') + '> Hide names on the trade feed</label></div></div></div>';
   $('#cP').onclick = hostPause; $('#cN').onclick = hostTickNow; $('#cX15').onclick = () => { G.yl += 15; if (G.ph === 'pause') Host.remain += 15000; markAll(); toast('15 seconds added to this year'); }; $('#cE').onclick = () => { if (confirm('End the game now and pay out all companies?')) hostEndNow(); };
+  $('#cBk').onchange = e => { G.cfg.brk = e.target.checked; }; $('#cBs').onchange = e => { G.cfg.brkSec = Math.max(5, Math.min(300, +e.target.value || 30)); e.target.value = G.cfg.brkSec; };
   $$('[data-e]').forEach(b => b.onclick = () => { hostFire(b.dataset.e); toast('Event triggered'); }); $('#cA').onchange = e => { G.cfg.anon = e.target.checked; };
 }
 function renderLobby() {

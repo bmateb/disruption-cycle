@@ -34,7 +34,7 @@ function candleChart(o) { // o.cs [{o,h,l,c,lab}], o.slots, o.marks [{i,label,ok
   if (!cs.length) return '<div class="nochart" style="height:' + h + 'px">Chart appears when the market opens</div>';
   let mn = Infinity, mx = -Infinity; cs.forEach(c => { if (c.l < mn) mn = c.l; if (c.h > mx) mx = c.h; });
   if (o.hline != null) { mn = Math.min(mn, o.hline); mx = Math.max(mx, o.hline); }
-  const pad = (mx - mn) * 0.08 || mx * 0.01 || 1; mn -= pad; mx += pad; if (o.floor0 && mn < 0) mn = 0;
+  const pad = (mx - mn) * 0.08 || mx * 0.01 || 1; mn -= pad; mx += pad; if (o.minRange && mx - mn < o.minRange) { const m = (mx + mn) / 2; mn = m - o.minRange / 2; mx = m + o.minRange / 2; } if (o.floor0 && mn < 0) mn = 0;
   const rg = mx - mn, dec = o.dec != null ? o.dec : rg < 0.8 ? 3 : rg < 8 ? 2 : rg < 80 ? 1 : 0;
   const yf = o.yfmt ? o.yfmt : (v => v.toFixed(dec));
   const slots = Math.max(o.slots || cs.length, cs.length), pw = w - L - R, sl = pw / slots, bw = Math.max(1.6, Math.min(16, sl * 0.62));
@@ -95,7 +95,7 @@ function projLabel(i, tk) {
 function nextEv(q) { return q.gate != null && q.st === 'live' ? EVS[q.gi] + ' · Y' + q.gate : '—'; }
 function marketTable(pub, tk, o) {
   o = o || {}; const key = o.key || 'm';
-  let h = '<table class="mt"><thead><tr><th>Company</th><th>Price €</th><th>Change</th><th class="hm">Since open</th><th class="hm">Net buying</th><th class="hm">Next event</th>' + (o.priv ? '<th>My shares</th>' : '') + '</tr></thead><tbody>';
+  let h = '<table class="mt"><thead><tr><th>Company</th><th>Price €</th><th>Change</th><th class="hm">Since open</th><th class="hm">Next event</th>' + (o.priv ? '<th>My shares</th>' : '') + '</tr></thead><tbody>';
   for (let i = 0; i < DC.NP; i++) {
     const d = DC.PROJ[i], q = tk.pr[i], P = pub.P[i], pp = pub.pp ? pub.pp[i] : P, open = q.ph[0] || P, so = P / open - 1;
     const lab = projLabel(i, tk), fl = pub.fl[i], live = q.st === 'live';
@@ -103,7 +103,7 @@ function marketTable(pub, tk, o) {
     h += '<tr class="mk' + (o.sel === i ? ' sel' : '') + (live ? '' : ' dead') + '" data-i="' + i + '"><td><span class="pn"><span class="hd h' + d.h + 'c"></span>' + d.code + ' <span class="faint" style="font-weight:500">' + esc(d.name) + '</span></span><span class="ps"><span class="chip ' + lab.c + '">' + lab.t + '</span></span></td>' +
       '<td class="pxc' + (live ? flashCls(key + i, P) : '') + '"><b>' + px(P) + '</b></td><td>' + (live ? chgHTML(P, pp) : '') + '</td>' +
       '<td class="hm ' + cls(so) + '">' + pct(so, 1) + '</td>' +
-      '<td class="hm ' + cls(fl) + '">' + (live ? eurS(fl) : '') + '</td><td class="hm nw">' + nextEv(q) + '</td>' +
+      
       (o.priv ? '<td>' + (mine ? '<b>' + mine + '</b><span class="ps">' + eurK(mine * P) + '</span>' : '<span class="faint">—</span>') + '</td>' : '') + '</tr>';
   }
   return h + '</tbody></table>';

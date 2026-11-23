@@ -27,7 +27,7 @@ function candleBlock(i, o) { // o: {tf, bars, cur, curY, tk, key, w, h}
   const b = buildCandles(o.bars, live ? o.cur : null, o.curY, mode, eventLog(q), mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : 0);
   const tg = '<div class="seg tf"><button class="' + (mode === 'live' ? 'on' : '') + '" data-act="tf" data-m="live">Live · 5 s candles</button><button class="' + (mode === 'year' ? 'on' : '') + '" data-act="tf" data-m="year">By year</button></div>';
   return '<div class="row" style="justify-content:space-between;margin:8px 0 2px">' + tg + '<span class="small faint">green = rose · red = fell</span></div>' +
-    candleChart({ cs: b.cs, marks: b.marks, xl: b.xl, slots: mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : o.tk.T, w: o.w || 380, h: o.h || 190, floor0: true, last: o.last, label: DC.PROJ[i].name + ' price candles' });
+    candleChart({ cs: b.cs, marks: b.marks, xl: b.xl, slots: mode === 'live' ? (window.innerWidth <= 560 ? 36 : 56) : o.tk.T, w: o.w || 380, h: o.h || 190, floor0: true, minRange: (o.last || 10) * 0.015, last: o.last, label: DC.PROJ[i].name + ' price candles' });
 }
 
 /* ---------- company detail ---------- */
@@ -105,7 +105,7 @@ function ticketUpdate() {
     '<span>Shares</span><span>' + r.S + ' of ' + C.priv.hold[i] + '</span><span>Average price</span><span>€' + (r.S ? px(r.avg) : '—') + ' <span class="' + (slip < -0.02 ? 'wn' : '') + '">(' + pct(slip, 1) + ' price impact)</span></span><span>Fee</span><span>' + eur(r.fee) + '</span><span><b>You receive</b></span><span><b>' + eur(r.tot) + '</b></span>';
   $('#tw').innerHTML = r.warn ? '<div class="note warn">' + esc(r.warn) + '</div>' : '';
   const b = $('#tgo'); b.textContent = (ph === 'prep' ? 'Practice ' : '') + (C.side === 'buy' ? 'Buy ' : 'Sell ') + r.S + ' ' + DC.PROJ[i].code; b.className = 'btn ' + (C.side === 'buy' ? 'pri' : 'sell'); b.disabled = !r.ok || !!C.pending || (ph !== 'run' && ph !== 'prep');
-  if (ph === 'pause') $('#tw').innerHTML = '<div class="note warn">Market paused by the host.</div>';
+  if (ph === 'pause') $('#tw').innerHTML = '<div class="note warn">' + (C.pub.bk ? 'Planning break: trading reopens when the next year starts.' : 'Market paused by the host.') + '</div>';
 }
 
 /* ---------- practice mode: a private sandbox that never touches the real market ---------- */
@@ -197,9 +197,9 @@ function clientBoot(me) {
 }
 function sendHi() { if (C.net) C.net.send('a', { k: 'hi', id: C.me.id, tok: C.me.tok, name: C.me.name }, 1); }
 function tabsFor(ph) {
-  if (ph === 'prep') return [['guide', 'How to play'], ['market', 'Market'], ['port', 'Portfolio'], ['news', 'News']];
-  if (ph === 'end') return [['results', 'Results'], ['market', 'Market'], ['port', 'Portfolio'], ['news', 'News']];
-  return [['market', 'Market'], ['port', 'Portfolio'], ['news', 'News'], ['board', 'Leaders'], ['guide', 'Guide']];
+  if (ph === 'prep') return [['guide', 'How to play', '📘'], ['market', 'Market', '📈'], ['port', 'Portfolio', '💼'], ['news', 'News', '📰']];
+  if (ph === 'end') return [['results', 'Results', '🏁'], ['market', 'Market', '📈'], ['port', 'Portfolio', '💼'], ['news', 'News', '📰']];
+  return [['market', 'Market', '📈'], ['port', 'Portfolio', '💼'], ['news', 'News', '📰'], ['board', 'Leaders', '🏆'], ['guide', 'Guide', '📘']];
 }
 function guideHTML() {
   const g = (t, d) => '<div class="gl"><b>' + t + '</b><span>' + d + '</span></div>';
@@ -225,16 +225,17 @@ function renderClient(force) {
   }
   const TB = tabsFor(ph); if (!TB.some(t => t[0] === C.tab)) { C.tab = TB[0][0]; }
   const tsig = C.tab + '|' + ph;
-  if ($('#ctabs').dataset.k !== tsig) { $('#ctabs').innerHTML = TB.map(t => '<button class="tab' + (C.tab === t[0] ? ' on' : '') + '" data-act="tab" data-t="' + t[0] + '">' + t[1] + '</button>').join(''); $('#ctabs').dataset.k = tsig; $('#cnav').innerHTML = TB.map(t => '<button class="' + (C.tab === t[0] ? 'on' : '') + '" data-act="tab" data-t="' + t[0] + '">' + t[1] + '</button>').join(''); }
+  if ($('#ctabs').dataset.k !== tsig) { $('#ctabs').innerHTML = TB.map(t => '<button class="tab' + (C.tab === t[0] ? ' on' : '') + '" data-act="tab" data-t="' + t[0] + '">' + t[1] + '</button>').join(''); $('#ctabs').dataset.k = tsig; $('#cnav').innerHTML = TB.map(t => '<button class="' + (C.tab === t[0] ? 'on' : '') + '" data-act="tab" data-t="' + t[0] + '"><i>' + t[2] + '</i>' + t[1] + '</button>').join(''); }
   // banner: practice mode or connection warning
   let bn = '';
   if (ph === 'prep') bn = '<div class="wrap"><div class="prac"><div><b>PRACTICE MODE</b> · prices are frozen and nothing you do counts. Try buying and selling, open a company, read the guide. <span class="faint">' + pub.rc + ' of ' + pub.hc + ' ready</span></div><div class="row"><button class="btn sm" data-act="prreset">Reset practice</button><button class="btn pri sm" data-act="rdy">' + (C.rdy ? '✓ Ready (tap to undo)' : 'I’m ready') + '</button></div></div></div>';
+  else if (ph === 'pause' && pub.bk) bn = '<div class="wrap"><div class="prac plan"><div><b>PLANNING BREAK</b> · year ' + Math.min(pub.t + 1, pub.T) + ' starts in <b class="mono">' + mmss(pub.bk - nowHost()) + '</b>. Prices are frozen and trading is closed. Read the news, check the charts and plan your next trades.</div></div></div>';
   else if (stale) bn = '<div class="wrap"><div class="note warn" style="margin-top:8px">Waiting for the host… your last data is shown.</div></div>';
   if ($('#banner').dataset.k !== bn) { $('#banner').innerHTML = bn; $('#banner').dataset.k = bn; }
   renderTicker();
   // header
   const left = ph === 'run' ? Math.max(0, pub.te - nowHost()) : ph === 'pause' ? tk.pz : 0;
-  $('#ck').textContent = ph === 'prep' ? 'Practice · waiting for host' : ph === 'end' ? 'Game over' : (ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(pub.t + 1, pub.T) + ' / ' + pub.T + ' · ' + mmss(left);
+  $('#ck').textContent = ph === 'prep' ? 'Practice · waiting for host' : ph === 'end' ? 'Game over' : ph === 'pause' && pub.bk ? 'Planning break · ' + mmss(pub.bk - nowHost()) : (ph === 'pause' ? 'PAUSED · ' : '') + 'Year ' + Math.min(pub.t + 1, pub.T) + ' / ' + pub.T + ' · ' + mmss(left);
   $('#cb').style.width = (ph === 'end' ? 100 : ph === 'prep' ? 0 : 100 - left / ((pub.yl || tk.tickSec || 75) * 1000) * 100) + '%';
   const nw = liveNW(), pv = prevNW(), P = PV(); $('#kNW').textContent = eurK(nw); $('#kNW').className = cls(nw - tk.cash0); $('#kCash').textContent = eurK(C.priv.cash);
   const dn = nw - pv; $('#kNWc').innerHTML = ph === 'run' && Math.abs(dn) >= 1 ? '<span class="' + cls(dn) + '">' + arrow(dn) + ' ' + eurK(Math.abs(dn)) + '</span>' : 'Portfolio';
@@ -248,10 +249,11 @@ function renderClient(force) {
   if (C.tab === 'market') {
     const narrow = window.innerWidth <= 900;
     if (body.dataset.k !== sig) {
-      body.innerHTML = '<div class="cols"><div class="panel"><h2>Market <span class="small faint">tap a company</span><span class="spacer"></span><span class="small faint"><span class="hd h1c"></span>low <span class="hd h2c"></span>medium <span class="hd h3c"></span>high risk</span></h2><div id="cMk"></div></div><div class="panel' + (narrow && C.sel != null ? ' overlay' : '') + '" id="cDt"></div></div>';
+      const only = narrow && C.sel != null;
+      body.innerHTML = only ? '<div class="panel" id="cDt"></div>' : '<div class="cols"><div class="panel"><h2>Market <span class="small faint hm">tap a company</span><span class="spacer"></span><span class="small faint" style="white-space:nowrap"><span class="hd h1c"></span>low <span class="hd h2c"></span>med <span class="hd h3c"></span>high risk</span></h2><div id="cMk"></div></div><div class="panel" id="cDt"></div></div>';
       body.dataset.k = sig; C.rebuiltDt = true;
     }
-    $('#cMk').innerHTML = marketTable(P, tk, { priv: C.priv, sel: C.sel, key: 'c' });
+    if ($('#cMk')) $('#cMk').innerHTML = marketTable(P, tk, { priv: C.priv, sel: C.sel, key: 'c' });
     const dt = $('#cDt');
     if (C.sel == null) { if (!narrow) dt.innerHTML = '<div class="pb"><h2>Pick a company</h2><p class="muted">Each company is a young business that needs funding. Read its cash, news and next event, then buy or sell. Every trade moves the price for everybody.</p><div class="note"><b>The rules in short.</b> Prices change every second with trading and news. At each funding round and at the IPO a company either passes and its price jumps, or fails and loses almost everything. At the end every survivor is paid out at its real value. You may hold at most ' + Math.round(tk.maxExp * 100) + '% of your portfolio in one company.</div></div>'; else dt.innerHTML = ''; }
     else {
@@ -266,14 +268,14 @@ function renderClient(force) {
 }
 function portHTML(pub, tk) {
   const p = C.priv, nw = liveNW(), pv = prevNW(); let rows = '', invested = 0; const hz = [0, 0, 0];
-  for (let i = 0; i < DC.NP; i++) { const s = p.hold[i]; if (!s) continue; const v = s * pub.P[i], d = DC.PROJ[i], pl = v - p.cost[i]; invested += v; hz[d.h - 1] += v; const pp = pub.pp ? pub.pp[i] : pub.P[i]; rows += '<tr class="mk" data-i="' + i + '" data-act="goto"><td><span class="pn"><span class="hd h' + d.h + 'c"></span>' + d.code + '</span><span class="ps">' + s + ' shares</span></td><td>' + eurK(v) + '</td><td>' + px(p.cost[i] / s) + '</td><td>' + px(pub.P[i]) + ' ' + chgHTML(pub.P[i], pp) + '</td><td class="' + cls(pl) + '">' + eurS(pl) + '<span class="ps">' + pct(p.cost[i] ? v / p.cost[i] - 1 : 0, 1) + '</span></td><td>' + Math.round(v / nw * 100) + '%</td></tr>'; }
+  for (let i = 0; i < DC.NP; i++) { const s = p.hold[i]; if (!s) continue; const v = s * pub.P[i], d = DC.PROJ[i], pl = v - p.cost[i]; invested += v; hz[d.h - 1] += v; const pp = pub.pp ? pub.pp[i] : pub.P[i]; rows += '<tr class="mk" data-i="' + i + '" data-act="goto"><td><span class="pn"><span class="hd h' + d.h + 'c"></span>' + d.code + '</span><span class="ps">' + s + ' shares</span></td><td>' + eurK(v) + '</td><td class="hm">' + px(p.cost[i] / s) + '</td><td class="pxc">' + px(pub.P[i]) + '<br>' + chgHTML(pub.P[i], pp) + '</td><td class="' + cls(pl) + '">' + eurS(pl) + '<span class="ps">' + pct(p.cost[i] ? v / p.cost[i] - 1 : 0, 1) + '</span></td><td class="hm">' + Math.round(v / nw * 100) + '%</td></tr>'; }
   const cs = []; const nwc = p.nwc || [];
   nwc.forEach((c, k) => cs.push({ o: c[0], h: c[1], l: c[2], c: c[3], lab: 'Year ' + (k + 1) }));
   if (pub.ph === 'run' || pub.ph === 'pause') cs.push({ o: C.nc[0], h: C.nc[1], l: C.nc[2], c: C.nc[3], live: true, lab: 'This year' });
   const xl = cs.map((c, k) => [k, String(k + 1)]);
-  let h = '<div class="cols"><div style="display:grid;gap:14px"><div class="panel"><h2>Portfolio value</h2><div class="pb"><div class="row" style="align-items:baseline;gap:10px"><b class="mono bigpx">' + eur(nw) + '</b><span class="' + cls(nw - tk.cash0) + ' mono">' + eurS(nw - tk.cash0) + ' (' + pct(nw / tk.cash0 - 1, 1) + ')</span>' + (pub.ph === 'run' ? '<span class="chg ' + cls(nw - pv) + '">' + arrow(nw - pv) + ' ' + eur(Math.abs(nw - pv)) + '</span>' : '') + '</div>' + candleChart({ cs: cs, xl: xl, hline: tk.cash0, slots: tk.T, w: 380, h: 160, yfmt: v => (v / 1000).toFixed(0) + 'k', label: 'portfolio value by year' }) + '<p class="small muted">One candle per year. Dotted line = your starting €' + (tk.cash0 / 1000) + 'k. Cash ' + eur(p.cash) + ' · shares ' + eur(invested) + ' · trades ' + p.tr + '</p></div></div>' +
+  let h = '<div class="cols"><div style="display:grid;gap:14px"><div class="panel"><h2>Portfolio value</h2><div class="pb"><div class="row" style="align-items:baseline;gap:10px"><b class="mono bigpx">' + eur(nw) + '</b><span class="' + cls(nw - tk.cash0) + ' mono">' + eurS(nw - tk.cash0) + ' (' + pct(nw / tk.cash0 - 1, 1) + ')</span>' + (pub.ph === 'run' ? '<span class="chg ' + cls(nw - pv) + '">' + arrow(nw - pv) + ' ' + eur(Math.abs(nw - pv)) + '</span>' : '') + '</div>' + candleChart({ cs: cs, xl: xl, hline: tk.cash0, slots: tk.T, w: 380, h: 160, minRange: tk.cash0 * 0.05, yfmt: v => (v / 1000).toFixed(1) + 'k', label: 'portfolio value by year' }) + '<p class="small muted">One candle per year. Dotted line = your starting €' + (tk.cash0 / 1000) + 'k. Cash ' + eur(p.cash) + ' · shares ' + eur(invested) + ' · trades ' + p.tr + '</p></div></div>' +
     '<div class="panel"><h2>Mix by risk class</h2><div class="pb">' + stackBar([{ v: hz[0], c: 'var(--h1)', l: 'Low risk' }, { v: hz[1], c: 'var(--h2)', l: 'Medium risk' }, { v: hz[2], c: 'var(--h3)', l: 'High risk' }, { v: p.cash, c: 'var(--line)', l: 'Cash' }]) + '<p class="small muted" style="margin-top:8px">A common rule of thumb for innovation: roughly 70% low risk, 20% medium, 10% high.</p></div></div></div>' +
-    '<div class="panel"><h2>Your shares</h2>' + (rows ? '<table><thead><tr><th>Company</th><th>Value</th><th>Avg cost</th><th>Price</th><th>Profit / loss</th><th>Weight</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<div class="pb"><p class="muted">No shares yet. Open the Market tab and buy your first company.</p></div>') + '</div></div>';
+    '<div class="panel"><h2>Your shares</h2>' + (rows ? '<table><thead><tr><th>Company</th><th>Value</th><th class="hm">Avg cost</th><th>Price</th><th>Profit / loss</th><th class="hm">Weight</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<div class="pb"><p class="muted">No shares yet. Open the Market tab and buy your first company.</p></div>') + '</div></div>';
   return h;
 }
 function clientClick(e) {

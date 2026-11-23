@@ -70,3 +70,9 @@ Live market game for the "Financing of innovation" session. Every student invest
 - **Practice phase:** when the lobby opens, students see the frozen market with a private practice account (trades there never reach the real market). Each presses **I'm ready**; the host sees "x of y ready" and presses Start.
 - **Final results:** all investors ranked with final value, profit / loss, return and a tap-to-open full portfolio. The host can download the table as CSV.
 - Seconds per year is rounded to a multiple of 5 (candle length).
+
+## Version 3 changes
+
+- **Planning break:** tick "Planning break at the end of every year" (and the length in seconds) on the setup screen, or change it live under Controls. At each year end prices freeze and trading closes, students see a countdown banner, and the next year starts automatically. "Start next year now" ends a break early. No break follows the final year.
+- **Livelier prices:** news now moves prices in typical market shapes: an immediate spike that partly fades back (overshoot), part of the move staying, volatility clustering after big headlines, short trending runs, a gap and spike on a successful IPO or round, and a crash-then-slide on a failure. Market-wide events hit high-risk stocks hardest.
+- **Phone layout:** bottom navigation is always visible and highlighted, the company view no longer hides the header, wide numbers stack so nothing is cut off, and panels have more padding.

@@ -1,0 +1,31 @@
+const { chromium, devices } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt', OUT=__dirname+'/';
+(async()=>{
+  const br=await chromium.launch(); const errs=[];
+  const mk=async(w,h,name)=>{const ctx=await br.newContext({viewport:{width:w,height:h},deviceScaleFactor:2});const p=await ctx.newPage();p.on('pageerror',e=>errs.push(name+' '+e.message));p.on('dialog',d=>d.accept());return p;};
+  const host=await mk(1400,900,'host');
+  await host.goto(BASE+'#host=1'); await host.waitForSelector('#go');
+  await host.selectOption('#sR','custom'); await host.fill('#sU',BU); await host.fill('#sT','8'); await host.fill('#sS','20'); await host.fill('#sB','6'); await host.fill('#sA',BASE); await host.fill('#sBs','8');
+  await host.click('#go'); await host.waitForSelector('#lstart',{timeout:20000});
+  const link=await host.locator('.mono.small').first().innerText();
+  const ph=await mk(390,800,'phone'); await ph.goto(link); await ph.fill('#nm','PhoneUser'); await ph.click('#nb');
+  const d=await mk(1200,850,'desk'); await d.goto(link); await d.fill('#nm','DeskUser'); await d.click('#nb');
+  await ph.waitForSelector('.prac'); await ph.click('button[data-act="rdy"]'); await d.click('button[data-act="rdy"]');
+  await host.click('#lstart'); await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent),null,{timeout:15000});
+  await ph.screenshot({path:OUT+'v3_phone_market.png'});
+  await ph.click('tr.mk[data-i="9"]'); await ph.waitForSelector('#tgo'); await ph.waitForTimeout(800);
+  console.log('nav visible in detail view:',await ph.locator('#cnav').isVisible(),'header visible:',await ph.locator('#ck').isVisible());
+  await ph.click('button[data-a="5000"]'); await ph.click('#tgo'); await ph.waitForSelector('.toast:has-text("Bought")',{timeout:8000});
+  await ph.screenshot({path:OUT+'v3_phone_detail.png'});
+  await ph.evaluate(()=>window.scrollTo(0,500)); await ph.screenshot({path:OUT+'v3_phone_detail2.png'});
+  await ph.click('#cnav [data-t="port"]'); await ph.waitForTimeout(700); await ph.screenshot({path:OUT+'v3_phone_port.png'});
+  const ow=await ph.evaluate(()=>document.documentElement.scrollWidth); console.log('phone page width',ow,'(viewport 390)');
+  await d.click('[data-act="tab"][data-t="market"]'); await d.click('tr.mk[data-i="2"]'); await d.waitForTimeout(800); await d.screenshot({path:OUT+'v3_desk.png'});
+  // wait for year 1 end -> planning break
+  await ph.waitForFunction(()=>/Planning break/.test(document.querySelector('#ck').textContent),null,{timeout:40000}); console.log('break shown:',await ph.locator('#ck').innerText(),'|',(await ph.locator('.prac.plan').innerText()).slice(0,90));
+  await ph.click('#cnav [data-t="market"]'); await ph.evaluate(()=>{}); if(await ph.locator('button[data-act="back"]').count()) await ph.click('button[data-act="back"]'); await ph.waitForSelector('tr.mk[data-i="1"]'); const p1=await ph.locator('tr.mk[data-i="1"] td.pxc').innerText(); await ph.waitForTimeout(2500); const p2=await ph.locator('tr.mk[data-i="1"] td.pxc').innerText(); console.log('prices frozen during break:',p1===p2,p1,p2);
+  await ph.screenshot({path:OUT+'v3_break.png'});
+  await host.screenshot({path:OUT+'v3_host_break.png'}); console.log('host clock:',await host.locator('#hclk').innerText());
+  await ph.waitForFunction(()=>/Year 2/.test(document.querySelector('#ck').textContent)&&!document.querySelector('.prac'),null,{timeout:20000}); console.log('resumed:',await ph.locator('#ck').innerText());
+  console.log('ERRORS:',errs.length?errs.join('\n'):'none'); await br.close();
+})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});
