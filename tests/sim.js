@@ -1,4 +1,4 @@
-const DC=require('../src/engine.js');
+const DC=require('./engine.js');
 function run(seed,n,mix,opts){
   opts=opts||{};
   const G=DC.newGame(Object.assign({T:14},opts.cfg||{}),seed);
@@ -6,9 +6,11 @@ function run(seed,n,mix,opts){
   const styles=[];
   for(let i=0;i<n;i++){const s=mix[i%mix.length];styles.push(s);DC.addPlayer(G,'p'+i,'P'+i,s);}
   DC.start(G);
+  const SEC=G.cfg.tickSec, pa=4/SEC;
   for(let t=0;t<G.T;t++){
-    for(let rep=0;rep<8;rep++){
-      for(const id of G.ord){const pl=G.pl[id]; if(rng()<0.5) DC.botAct(G,pl,rng);}
+    for(let k=0;k<SEC;k++){
+      DC.second(G);
+      for(const id of G.ord){const pl=G.pl[id]; if(rng()<pa) DC.botAct(G,pl,rng);}
     }
     DC.advance(G);
   }

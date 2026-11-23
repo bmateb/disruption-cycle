@@ -59,3 +59,14 @@ Live market game for the "Financing of innovation" session. Every student invest
 - Tested: rules engine (thousands of simulated classes with five strategy types), live sync with 45 simulated students trading about 27 times per second through a local relay (median confirmation 146 ms, 95th percentile 255 ms), page reloads, host reload with resume, relay restart, late joiners, phone and desktop layouts, light and dark themes.
 - Not tested: the real public relays from my environment (they are not reachable from it), and your university network. Run the relay test and a two-device rehearsal in the room you will teach in.
 - I have not seen your financing-of-innovation slides, so the debrief mapping is generic. Share the deck and I will align names and examples.
+
+
+## Version 2 changes (live prices, practice phase, results)
+
+- **Prices update every second.** Each price shows an arrow, the amount and the percent change versus a second ago, plus the change since the market opened.
+- **Candlestick charts** replace line charts: "Live" (one candle per 5 seconds) and "By year". Green = rose, red = fell. Dashed lines mark funding rounds and the IPO (green passed, red failed). Portfolio value is also shown as yearly candles.
+- **Plain stock-market words:** price, change, volume, net buying, portfolio value, profit / loss, liquidity, Series A / Series B / IPO, analyst report. A "How to play" tab has a short glossary.
+- **Company news:** very short headlines appear all game in a ticker and the News tab. Before each funding round and IPO there are heads-up headlines (round planned, cash running low or well funded, insiders upbeat or doubtful). Market-wide events (deep-tech frenzy, higher rates, disruptor) get a warning headline first. Takeover rumours are only rumours.
+- **Practice phase:** when the lobby opens, students see the frozen market with a private practice account (trades there never reach the real market). Each presses **I'm ready**; the host sees "x of y ready" and presses Start.
+- **Final results:** all investors ranked with final value, profit / loss, return and a tap-to-open full portfolio. The host can download the table as CSV.
+- Seconds per year is rounded to a multiple of 5 (candle length).

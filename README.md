@@ -6,7 +6,7 @@ A live classroom market for innovation projects, built for a lecture on financin
 
 ## Run it in class
 1. Publish `index.html` with GitHub Pages (Settings, Pages, deploy from branch `main`, folder `/`). The address is `https://<user>.github.io/<repo>/`.
-2. Open that address, choose **Set up the market**, run the relay test, open the lobby.
+2. Open that address, choose **Set up the market**, run the relay test, open the lobby (students practise on a frozen market until you press Start).
 3. Students scan the QR code or type the join code, enter a name, and trade.
 
 ## Develop
