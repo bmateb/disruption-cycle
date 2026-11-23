@@ -1,0 +1,14 @@
+const { chromium } = require('playwright');
+const BASE='http://localhost:8099/', BU='ws://localhost:8083/mqtt';
+(async()=>{const br=await chromium.launch();const mk=async(w,h)=>{const c=await br.newContext({viewport:{width:w,height:h},deviceScaleFactor:2});return await c.newPage();};
+const host=await mk(1400,900);await host.goto(BASE+'#host=1');await host.waitForSelector('#go');
+await host.selectOption('#sR','custom');await host.fill('#sU',BU);await host.fill('#sT','10');await host.fill('#sS','60');await host.fill('#sB','4');await host.fill('#sA',BASE);await host.fill('#sEs','9');
+await host.click('#go');await host.waitForSelector('#lstart');const link=await host.locator('.mono.small').first().innerText();
+const ph=await mk(390,800);await ph.goto(link);await ph.fill('#nm','P');await ph.click('#nb');await ph.waitForSelector('.prac');await ph.click('button[data-act="rdy"]');
+await host.click('#lstart');await ph.waitForFunction(()=>/Year 1/.test(document.querySelector('#ck').textContent));
+await host.click('#bN');await ph.waitForSelector('.ann');
+const anims=await ph.evaluate(()=>{const a=document.querySelector('.ann');return getComputedStyle(a).animationName});console.log('animation:',anims);
+await ph.evaluate(()=>{window.__n=document.querySelector('.ann')});await ph.waitForTimeout(2500);
+console.log('same DOM node kept:',await ph.evaluate(()=>window.__n===document.querySelector('.ann')),'(false is ok if no animation)');
+const pb=await ph.evaluate(()=>{const m=document.querySelector('main');return getComputedStyle(m).paddingBottom});console.log('main padding-bottom:',pb);
+await ph.evaluate(()=>window.scrollTo(0,1e6));await ph.waitForTimeout(300);await ph.screenshot({path:'v61_bottom.png'});await br.close();})().catch(e=>{console.error('FAIL',e.message);process.exit(1)});
